@@ -6,3 +6,17 @@
 ## 功能
 
 实施显示已连接的设备电量信息
+
+安装库
+
+```
+pip install -r requirements.txt
+```
+
+
+
+打包命令
+
+```
+pyinstaller -F -w -i .\icon\icon.ico --version-file=version_info.txt main.py
+```
