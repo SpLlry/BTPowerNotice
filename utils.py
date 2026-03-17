@@ -1,6 +1,26 @@
+import os
 import subprocess
+import sys
 import winreg
 import yaml
+
+
+def get_exe_run_dir():
+    """
+    获取EXE文件所在的运行目录（兼容开发环境+打包后环境）
+    """
+    # 判断是否为PyInstaller打包后的EXE程序
+    if getattr(sys, 'frozen', False):
+        # 打包为EXE：获取EXE的绝对路径
+        app_path = os.path.dirname(sys.executable)
+    else:
+        print(os.path.dirname(sys.executable))
+        # 开发环境：获取当前.py文件的绝对路径
+        app_path = os.path.dirname(os.path.abspath(__file__))
+
+    # 获取文件所在的文件夹路径（即运行目录）
+    # exe_dir = os.path.dirname(app_path)
+    return app_path
 
 
 def get_config(config_path: str):

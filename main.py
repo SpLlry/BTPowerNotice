@@ -12,6 +12,7 @@ from taskbar import RingWidget
 import buletooth.BLE
 import buletooth.BTC
 import utils
+from config import create_config
 
 # 全局异步锁：防止蓝牙并发扫描冲突
 SCAN_LOCK = asyncio.Lock()
@@ -36,14 +37,23 @@ async def get_device_info():
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.config = create_config()
         self.tray = None
         self.sys_theme = None
         self.task_bar = None
+        self.showTaskBar = self.config.getVal('Settings', 'task_bar')
         self.battery_items = {}
+        self.setFixedSize(0, 0)
+        # self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setWindowFlags(
+            Qt.WindowType.Tool
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowDoesNotAcceptFocus
+        )
         # 基础窗口设置（正常Windows窗口，无任何危险配置）
         self.setWindowTitle("BTPowerNotice-蓝牙电量轻松看")  # 窗口标题
-        self.resize(500, 300)  # 窗口大小
-        self.setMinimumSize(400, 250)  # 最小尺寸
+        # self.resize(500, 300)  # 窗口大小
+        # self.setMinimumSize(400, 250)  # 最小尺寸
         self.ini_ui()
 
         # 主线程定时器（最稳定，无事件循环报错）
@@ -56,7 +66,10 @@ class MainWindow(QMainWindow):
         self.tray.setTrayIcon()
         self.tray.show()
         self.task_bar = RingWidget(None)
-        self.task_bar.show()
+        # print(self.showTaskBar, "self.showTaskBar", self.showTaskBar == "1")
+        if self.showTaskBar == "1":
+            self.task_bar.show()
+
         # 创建中心部件（标准窗口必须）
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -145,7 +158,8 @@ async def main():
     sys.excepthook = lambda exctype, value, traceback: print(f"崩溃信息: {value}")
     app = QApplication(sys.argv)
     win = MainWindow()
-    # win.show()
+    win.show()
+    win.hide()
     # 标准运行方式
     while True:
         app.processEvents()
@@ -153,5 +167,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    print(utils.get_win11_taskbar_alignment())
+    # print(utils.get_win11_taskbar_alignment())
     asyncio.run(main())

@@ -11,8 +11,13 @@ class RingWidget(QMainWindow):
         super().__init__(parent)
 
         # UI数据：仅主线程可修改
-        self.card_size = 44
+        self.card_size = 22
         self.battery_items = {}
+        # self.battery_items = {
+        #     "123": {"name": "耳机", "battery": 100, "connected": True},
+        #     "456": {"name": "键盘", "battery": 50, "connected": True},
+        #     "789": {"name": "鼠标", "battery": 20, "connected": False},
+        # }
         self.tray = None
         self.scale = self.screen().devicePixelRatio()
         self.task_algin = 0
@@ -87,14 +92,17 @@ class RingWidget(QMainWindow):
         self.position_window()
 
     def set_theme(self, theme):
-        print("主题变化", theme)
+
         if theme == 0:
             if self.sys_theme == 'dark':
                 return
+            print("主题变化", theme)
             self.sys_theme = 'dark'
         else:
+
             if self.sys_theme == 'light':
                 return
+            print("主题变化", theme)
             self.sys_theme = 'light'
         self.update()
 
@@ -198,6 +206,7 @@ async def main():
         "789": {"name": "鼠标", "battery": 20, "connected": False},
     }
     win.update_tooltip()
+    win.update()
     win.show()
     while True:
         app.processEvents()

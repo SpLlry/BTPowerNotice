@@ -115,7 +115,8 @@ class TrayIcon(QSystemTrayIcon):
             self.parent().setVisible(not self.parent().isVisible())
 
     def about_app(self):
-        QMessageBox.about(self.ui, "关于", "本程序由PyQt6开发\n开源地址：https://github.com/SpLlry/BTPowerNotice")
+        QMessageBox.about(self.ui, "关于",
+                          f"本程序由PyQt6开发\n开源地址：https://github.com/SpLlry/BTPowerNotice")
 
     def quit_app(self):
         if QMessageBox.information(self.ui, "退出确认", "是否确认退出？",
