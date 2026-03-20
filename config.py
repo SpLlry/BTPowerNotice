@@ -32,6 +32,7 @@ class Config:
         if not self.config.has_section(section):
             self.config.add_section(section)
         self.config.set(section, key, value)
+        # print(self.file_path)
         with open(self.file_path, 'w') as configfile:
             self.config.write(configfile)
 

@@ -106,5 +106,42 @@ def get_windows_system_theme() -> int:
     return get_reg_value(reg_path, reg_key)
 
 
+def get_icon_path(relative_path):
+    """
+    获取资源绝对路径，兼容：开发环境 / PyInstaller打包环境
+    """
+    if hasattr(sys, '_MEIPASS'):
+        # PyInstaller打包后，临时解压路径
+        base_path = sys._MEIPASS
+    else:
+        # 开发环境，当前项目路径
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+
+def check_win_notifi():
+    """
+    检查 Windows 系统通知权限
+    返回 (is_system_enabled: bool, is_app_enabled: bool)
+    """
+    try:
+        # 1. 检查系统级通知总开关
+        reg_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\PushNotifications"
+
+        system_enabled = get_reg_value(reg_path, "ToastEnabled") == 1
+    except:
+        system_enabled = False
+
+    # 2. 检查是否开启专注助手（请勿打扰）
+    try:
+        reg_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Notifications\Settings"
+
+        silent = get_reg_value(reg_path, "SuppressToast") != 1
+    except:
+        silent = False
+
+    return system_enabled, silent
+
+
 if __name__ == '__main__':
     print()

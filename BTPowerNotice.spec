@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='main',
+    name='BTPowerNotice',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -35,6 +35,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    version='bu.py',
+    version='version_info.txt',
     icon=['icon\\icon.ico'],
 )

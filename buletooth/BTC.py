@@ -151,7 +151,8 @@ class Bluetooth:
                 )
 
                 if result != CR_SUCCESS:
-                    return f"无法定位设备节点: {result}"
+                    # return f"无法定位设备节点: {result}"、
+                    return -4
                 # 获取电池属性
                 battery = wintypes.BYTE()
                 prop_type = wintypes.DWORD()
@@ -169,11 +170,14 @@ class Bluetooth:
                 if result == CR_SUCCESS:
                     return battery.value
                 else:
-                    return "设备不支持电池属性"
+                    # return "设备不支持电池属性"
+                    return -1
             else:
-                return "不是经典蓝牙设备"
+                # return "不是经典蓝牙设备"
+                return -2
         except Exception as e:
-            return f"获取电量失败: {e}"
+            # return f"获取电量失败: {e}"
+            return -3
 
     def enumerate_bluetooth_system_device(self, bt_address: int) -> str | None:
         # 枚举 System 类设备
