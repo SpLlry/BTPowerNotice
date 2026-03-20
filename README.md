@@ -2,6 +2,9 @@
 
 一款轻松查看电脑蓝牙电量的工具
 
+* GitHub:[https://github.com/SpLlry/BTPowerNotice](https://)
+* Gitee:[https://gitee.com/spllr/BTPowerNotice/](https://)
+
 ---
 
 > *托盘*
@@ -48,3 +51,5 @@ pip install -r requirements.txt
 ```
 python build.py
 ```
+
+
