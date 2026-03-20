@@ -15,9 +15,9 @@
 
 > ---
 
-> <img width="398" height="92" alt="Snipaste_2026-03-17_17-19-54" src="https://github.com/user-attachments/assets/9b14bc1b-5e66-4b70-a814-66d231e17485" />
+> <img width="318" height="92" alt="Snipaste_2026-03-17_17-19-54" src="https://cdn.jsdelivr.net/gh/SpLlry/BTPowerNotice@main/resource/Snipaste_2026-03-20_17-08-45.png" />
 
-> <img width="398" height="92" alt="Snipaste_2026-03-17_17-19-54" src="https://github.com/user-attachments/assets/4cc02b2b-0175-42b7-9058-4ce39f48aa5a" />
+> <img width="318" height="92" alt="Snipaste_2026-03-17_17-19-54" src="https://cdn.jsdelivr.net/gh/SpLlry/BTPowerNotice@main/resource/566750244-4cc02b2b-0175-42b7-9058-4ce39f48aa5a.png" />
 
 ---
 
