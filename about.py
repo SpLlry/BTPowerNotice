@@ -7,47 +7,34 @@ from PyQt6.QtGui import QFont, QCursor, QIcon, QPixmap
 from PyQt6.QtCore import Qt
 
 from utils import get_icon_path
+from setting import settings
 
 
 class AboutCometDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_QuitOnClose, False)
-        self.appConfig = {
-            "appName": "BTPowerNotice",
-            "author": "SpLlry",
-            "version": "0.1.3",
-            "description": "一款轻松查看电脑蓝牙电量的工具"
-        }
-        # 窗口基础设置
-        self.setWindowTitle(f"关于 {self.appConfig.get('appName')}")
+        self.setWindowTitle(f"关于 {settings.APP_NAME}")
         self.setFixedSize(500, 300)
         self.setWindowIcon(QIcon(get_icon_path("icon/icon.ico")))
-        # 主布局（垂直）
         main_layout = QVBoxLayout()
         main_layout.setSpacing(18)
         main_layout.setContentsMargins(25, 25, 25, 25)
 
-        # --------------------------
-        # 顶部：图标 + 标题 + 版本信息
-        # --------------------------
         top_layout = QHBoxLayout()
         top_layout.setSpacing(25)
 
-        # ========== 核心修改：加载本地ICO图标 ==========
         icon_path = get_icon_path("icon/icon.ico")
         icon_label = QLabel()
-        # 加载图标并缩放（适配界面大小，可修改64,64调整尺寸）
         pixmap = QPixmap(icon_path).scaled(72, 72, Qt.AspectRatioMode.KeepAspectRatio,
                                            Qt.TransformationMode.SmoothTransformation)
         icon_label.setPixmap(pixmap)
         top_layout.addWidget(icon_label)
 
-        # 标题 + 版本 垂直布局
         title_layout = QVBoxLayout()
         title_layout.setSpacing(8)
 
-        title_label = QLabel(self.appConfig.get('appName'))
+        title_label = QLabel(settings.APP_NAME)
         title_font = QFont()
         title_font.setPointSize(24)
         title_font.setBold(True)
@@ -57,7 +44,6 @@ class AboutCometDialog(QDialog):
         top_layout.addLayout(title_layout)
         main_layout.addLayout(top_layout)
 
-        # 分隔线
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
         line.setFrameShadow(QFrame.Shadow.Sunken)
@@ -65,30 +51,26 @@ class AboutCometDialog(QDialog):
 
         auth_layout = QVBoxLayout()
         auth_layout.setSpacing(10)
-        auth_text = (f'{self.appConfig.get("appName")} v{self.appConfig.get("version")}\n'
-                     f'{self.appConfig.get("description")}'
-                     f'\nCopyright(C) 2026 By {self.appConfig.get("author")}')
+        auth_text = (f'{settings.APP_NAME} v{settings.APP_VERSION}\n'
+                     f'{settings.APP_DESCRIPTION}'
+                     f'\nCopyright(C) {settings.COPYRIGHT_YEAR} By {settings.APP_AUTHOR}')
         auth_content_label = QLabel(auth_text)
-        # 用等宽字体模拟原图像素感
         auth_content_label.setFont(QFont("Courier New", 16))
         auth_content_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         auth_layout.addWidget(auth_content_label)
 
         main_layout.addLayout(auth_layout)
 
-        # 分隔线
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
         line.setFrameShadow(QFrame.Shadow.Sunken)
         main_layout.addWidget(line)
-        # --------------------------
-        # 链接区域（主页 + 技术支持）
-        # --------------------------
+        
         links_layout = QVBoxLayout()
         links_layout.setSpacing(15)
         home_layout = QHBoxLayout()
         githublink = QLabel(
-            '<a href="https://github.com/SpLlry/BTPowerNotice" style="color: blue; text-decoration: underline;">'
+            f'<a href="{settings.GITHUB_URL}" style="color: blue; text-decoration: underline;">'
             'GitHub</a>'
         )
         githublink.setFont(QFont("Microsoft YaHei", 13))
@@ -97,7 +79,7 @@ class AboutCometDialog(QDialog):
         home_layout.addWidget(githublink)
 
         giteelink = QLabel(
-            '<a href="https://gitee.com/spllr/BTPowerNotice" style="color: blue; text-decoration: underline;">'
+            f'<a href="{settings.GITEE_URL}" style="color: blue; text-decoration: underline;">'
             'Gitee</a>'
         )
         giteelink.setFont(QFont("Microsoft YaHei", 13))
@@ -109,9 +91,6 @@ class AboutCometDialog(QDialog):
 
         main_layout.addLayout(links_layout)
 
-        # --------------------------
-        # 底部按钮区域
-        # --------------------------
         buttons_layout = QHBoxLayout()
         buttons_layout.addStretch()
 

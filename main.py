@@ -2,11 +2,15 @@ import asyncio
 import sys
 import random
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget,
-    QLabel, QPushButton, QVBoxLayout
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
 )
-# 【核心】用PyQt6原生QThread替代asyncio/QtConcurrent，零报错
-from PyQt6.QtCore import Qt, pyqtSlot, QTimer, QThread, pyqtSignal
+
+from PyQt6.QtCore import Qt, pyqtSlot, QTimer, pyqtSignal, QThread
 from PyQt6.QtGui import QFont
 
 from trayicon import TrayIcon
@@ -15,20 +19,26 @@ import buletooth.BLE
 import buletooth.BTC
 import utils
 from config import create_config
+from setting import settings
+
+# from notification import show_island_notification
 
 
-# ===================== 【蓝牙工作线程】纯Qt原生，无异步、无报错 =====================
-# ===================== 【修复版】蓝牙扫描线程 =====================
+# ===================== 【蓝牙工作线程】=====================
 class BtScanThread(QThread):
     scan_finished = pyqtSignal(dict)
 
+    def __init__(self, ble_scanner=None, btc_scanner=None):
+        super().__init__()
+        self.ble_scanner = ble_scanner
+        self.btc_scanner = btc_scanner
+
     def run(self):
         """在线程内创建 asyncio 循环，安全 await 异步蓝牙方法"""
-        # 为后台线程创建独立的 asyncio 事件循环（无警告、无冲突）
         loop = asyncio.new_event_loop()
+
         asyncio.set_event_loop(loop)
 
-        # 执行异步蓝牙扫描
         result = loop.run_until_complete(self.async_scan_devices())
         self.scan_finished.emit(result)
         loop.close()
@@ -36,28 +46,36 @@ class BtScanThread(QThread):
     async def async_scan_devices(self):
         """真正的异步蓝牙扫描（支持 await）"""
         try:
-            ble = buletooth.BLE.Bluetooth()
-            btc = buletooth.BTC.Bluetooth()
+            if self.ble_scanner is None:
+                self.ble_scanner = buletooth.BLE.Bluetooth()
+            if self.btc_scanner is None:
+                self.btc_scanner = buletooth.BTC.Bluetooth()
 
-            # ✅ 正确 await 异步方法，彻底消除警告
-            ble_devices = await ble.scan_ble_devices()
-            btc_devices = await btc.scan_classic_devices()
+            ble_devices = await self.ble_scanner.scan_ble_devices()
+            btc_devices = await self.btc_scanner.scan_classic_devices()
 
             devices = ble_devices + btc_devices
-            ret = {device['address']: device for device in devices}
-            # ret = {
+            ret = {device["address"]: device for device in devices}
+            # return {
             #     "123": {"name": "耳机", "battery": 100, "connected": True},
-            #     "456": {"name": "键盘", "battery": random.randint(0, 100), "connected": True},
+            #     "456": {
+            #         "name": "键盘",
+            #         "battery": random.randint(0, 100),
+            #         "connected": True,
+            #     },
             #     "789": {"name": "鼠标", "battery": 20, "connected": False},
             # }
             return ret
 
         except Exception as e:
             print(f"蓝牙扫描异常: {e}")
-            # 异常返回测试数据
             return {
                 "123": {"name": "耳机", "battery": 100, "connected": True},
-                "456": {"name": "键盘", "battery": random.randint(0, 100), "connected": True},
+                "456": {
+                    "name": "键盘",
+                    "battery": random.randint(0, 100),
+                    "connected": True,
+                },
                 "789": {"name": "鼠标", "battery": 20, "connected": False},
             }
 
@@ -70,38 +88,39 @@ class MainWindow(QMainWindow):
         self.tray = None
         self.sys_theme = None
         self.task_bar = None
-        self.showTaskBar = self.config.getVal('Settings', 'task_bar')
+        self.showTaskBar = self.config.getVal("Settings", "task_bar")
         self.battery_items = {}
+        self.prev_device_states = {}
+        self.ble_scanner = None
+        self.btc_scanner = None
         self.setFixedSize(0, 0)
         self.setWindowFlags(
             Qt.WindowType.Tool
             | Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowDoesNotAcceptFocus
         )
-        self.setWindowTitle("BTPowerNotice-蓝牙电量轻松看")
+        self.setWindowTitle(f"{settings.APP_NAME}-{settings.APP_DESCRIPTION}")
         self.ini_ui()
 
-        # 【Qt原生定时器】稳定无警告
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self.start_scan_thread)
-        self.update_timer.start(1000)
+        self.update_timer.start(5000)
 
-        # 初始化线程对象
         self.scan_thread = None
+        self.max_prev_states = 20
 
     def ini_ui(self):
         self.task_bar = RingWidget(config=self.config)
         self.tray = TrayIcon(self, self.task_bar.skin_manager, self.config)
         self.tray.setTrayIcon()
         self.tray.show()
+        self.tray.skin_changed.connect(self.task_bar.change_skin)
 
-        # ✅【严格保留】parent=None 绝对不修改
         print(self.task_bar.skin_manager.getAll())
 
         if self.showTaskBar == "1":
             self.task_bar.show()
 
-        # 基础UI
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
@@ -125,29 +144,78 @@ class MainWindow(QMainWindow):
 
     # ===================== 启动线程扫描（核心） =====================
     def start_scan_thread(self):
-        # 防止重复启动线程
         if self.scan_thread and self.scan_thread.isRunning():
-            return
+            self.scan_thread.wait()
+            self.scan_thread.deleteLater()
         task_align_type = utils.get_win11_taskbar_alignment()
         self.task_bar.set_task_align(task_align_type)
-        self.scan_thread = BtScanThread()
+
+        if self.ble_scanner is None:
+            self.ble_scanner = buletooth.BLE.Bluetooth()
+        if self.btc_scanner is None:
+            self.btc_scanner = buletooth.BTC.Bluetooth()
+
+        self.scan_thread = BtScanThread(self.ble_scanner, self.btc_scanner)
         self.scan_thread.scan_finished.connect(self.update_device_data)
         self.scan_thread.start()
 
     @pyqtSlot(dict)
     def update_device_data(self, device_info: dict):
         """主线程安全更新UI"""
+        for addr, device in device_info.items():
+            name = device.get("name", "未知设备")
+
+            if addr not in self.prev_device_states:
+                self.prev_device_states[addr] = device
+
+                if device.get("connected"):
+                    print("设备已连接", f"{name} 已连接到电脑")
+                    # show_island_notification("设备已连接", f"{name} 已连接到电脑", 3000)
+            else:
+                prev_device = self.prev_device_states[addr]
+                prev_connected = prev_device.get("connected", False)
+                curr_connected = device.get("connected", False)
+
+                if not prev_connected and curr_connected:
+                    # show_island_notification("设备已连接", f"{name} 已连接到电脑", 3000)
+                    print("设备已连接", f"{name} 已连接到电脑")
+                elif prev_connected and not curr_connected:
+                    # show_island_notification("设备已断开", f"{name} 已断开连接", 3000)
+                    print("设备已断开", f"{name} 已断开连接")
+                elif curr_connected:
+                    prev_battery = prev_device.get("battery", 0)
+                    curr_battery = device.get("battery", 0)
+                    if prev_battery != curr_battery:
+                        if curr_battery < 20:
+                            emoji = "🪫⚠️"
+                        elif curr_battery < 60:
+                            emoji = "🪫"
+                        else:
+                            emoji = "🔋"
+                        # show_island_notification(f"{emoji} 电量变化", f"{name}: {prev_battery}% → {curr_battery}%", 3000)
+                        print(
+                            f"{emoji} 电量变化",
+                            f"{name}: {prev_battery}% → {curr_battery}%",
+                        )
+
+            self.prev_device_states[addr] = device
+
         offline = [addr for addr in self.battery_items if addr not in device_info]
         for addr in offline:
             self.battery_items.pop(addr)
+            self.prev_device_states.pop(addr, None)
+
         for addr, device in device_info.items():
             self.battery_items[addr] = device
 
-        # 最多显示4个设备
         if len(self.battery_items) > 4:
             self.battery_items = dict(list(self.battery_items.items())[-4:])
 
-        # 更新托盘和任务栏
+        if len(self.prev_device_states) > self.max_prev_states:
+            keys_to_remove = list(self.prev_device_states.keys())[:-self.max_prev_states]
+            for key in keys_to_remove:
+                del self.prev_device_states[key]
+
         self.tray.update_device_info(device_info.values())
         self.task_bar.update_device_data(device_info)
 
@@ -177,7 +245,9 @@ def main():
     # 全局捕获
     sys.excepthook = except_hook
     app = QApplication(sys.argv)
-    app.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+    app.setHighDpiScaleFactorRoundingPolicy(
+        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+    )
     win = MainWindow()
     win.show()
     win.hide()

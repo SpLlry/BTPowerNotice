@@ -11,16 +11,16 @@
 
 > ---
 
-> <img width="342" height="250" alt="image" src="https://github.com/user-attachments/assets/609624dd-9339-45b5-9310-14a891398d8f" />
+> <img width="342" height="250" alt="image" src="https://gh-proxy.com/https://raw.githubusercontent.com/SpLlry/BTPowerNotice/refs/heads/main/resource/Snipaste_2026-03-20_17-09-08.png" />
 > ---
 
 > *任务栏*
 
 > ---
 
-> <img width="318" height="92" alt="Snipaste_2026-03-17_17-19-54" src="https://cdn.jsdelivr.net/gh/SpLlry/BTPowerNotice@main/resource/Snipaste_2026-03-20_17-08-45.png" />
+> <img width="318" height="92" alt="Snipaste_2026-03-17_17-19-54" src="https://gh-proxy.com/https://raw.githubusercontent.com/SpLlry/BTPowerNotice/refs/heads/main/resource/566750244-4cc02b2b-0175-42b7-9058-4ce39f48aa5a.png" />
 
-> <img width="318" height="92" alt="Snipaste_2026-03-17_17-19-54" src="https://cdn.jsdelivr.net/gh/SpLlry/BTPowerNotice@main/resource/566750244-4cc02b2b-0175-42b7-9058-4ce39f48aa5a.png" />
+> <img width="318" height="92" alt="Snipaste_2026-03-17_17-19-54" src="https://gh-proxy.com/https://raw.githubusercontent.com/SpLlry/BTPowerNotice/refs/heads/main/resource/Snipaste_2026-03-20_17-08-45.png />
 
 ---
 

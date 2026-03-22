@@ -70,6 +70,8 @@ INVALID_HANDLE_VALUE = wintypes.HANDLE(-1).value
 class Bluetooth:
     def __init__(self):
         self.ble_devices = []
+        self._setupapi = None
+        self._setupapi_initialized = False
         """初始化蓝牙管理器"""
         # 加载 CfgMgr32.dll
         self.cfgmgr32 = ctypes.WinDLL("CfgMgr32.dll")
@@ -91,6 +93,39 @@ class Bluetooth:
         ]
         self.cfgmgr32.CM_Get_DevNode_PropertyW.restype = wintypes.DWORD
 
+    def _init_setupapi(self):
+        if self._setupapi_initialized:
+            return
+        self._setupapi = ctypes.WinDLL("setupapi.dll", use_last_error=True)
+        self._setupapi.SetupDiGetClassDevsW.argtypes = [
+            ctypes.POINTER(GUID),
+            wintypes.LPCWSTR,
+            wintypes.HWND,
+            wintypes.DWORD
+        ]
+        self._setupapi.SetupDiGetClassDevsW.restype = wintypes.HANDLE
+
+        self._setupapi.SetupDiEnumDeviceInfo.argtypes = [
+            wintypes.HANDLE,
+            wintypes.DWORD,
+            ctypes.POINTER(SP_DEVINFO_DATA)
+        ]
+        self._setupapi.SetupDiEnumDeviceInfo.restype = wintypes.BOOL
+
+        self._setupapi.SetupDiGetDeviceInstanceIdW.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(SP_DEVINFO_DATA),
+            wintypes.LPWSTR,
+            wintypes.DWORD,
+            ctypes.POINTER(wintypes.DWORD)
+        ]
+        self._setupapi.SetupDiGetDeviceInstanceIdW.restype = wintypes.BOOL
+
+        self._setupapi.SetupDiDestroyDeviceInfoList.argtypes = [wintypes.HANDLE]
+        self._setupapi.SetupDiDestroyDeviceInfoList.restype = wintypes.BOOL
+
+        self._setupapi_initialized = True
+
     async def scan_classic_devices(self):
         """
         扫描经典蓝牙设备
@@ -109,19 +144,20 @@ class Bluetooth:
                 "type": "Classic"
             }
 
-            # 获取设备实例
-            btc_device = await BluetoothDevice.from_id_async(device.id)
-            if btc_device:
-                # 获取连接状态
+            btc_device = None
+            try:
+                btc_device = await BluetoothDevice.from_id_async(device.id)
+                if btc_device:
+                    status = btc_device.connection_status
+                    is_connected = status == BluetoothConnectionStatus.CONNECTED
+                    device_info["connected"] = is_connected
+                    device_info["address"] = btc_device.bluetooth_address
 
-                status = btc_device.connection_status
-                is_connected = status == BluetoothConnectionStatus.CONNECTED
-                device_info["connected"] = is_connected
-                device_info["address"] = btc_device.bluetooth_address
-
-                # print(self.get_bluetooth_instance_id(btc_device.bluetooth_address), 111)
-                ida = self.enumerate_bluetooth_system_device(btc_device.bluetooth_address)
-                device_info["battery"] = self.get_classic_battery_level(ida)
+                    ida = self.enumerate_bluetooth_system_device(btc_device.bluetooth_address)
+                    device_info["battery"] = self.get_classic_battery_level(ida)
+            finally:
+                if btc_device:
+                    btc_device.close()
 
             devices_info.append(device_info)
 
@@ -180,86 +216,46 @@ class Bluetooth:
             return -3
 
     def enumerate_bluetooth_system_device(self, bt_address: int) -> str | None:
-        # 枚举 System 类设备
-        try:
-            setupapi = ctypes.WinDLL("setupapi.dll", use_last_error=True)
+        self._init_setupapi()
+        setupapi = self._setupapi
 
-            # 设置函数参数和返回类型
-            setupapi.SetupDiGetClassDevsW.argtypes = [
-                ctypes.POINTER(GUID),
-                wintypes.LPCWSTR,
-                wintypes.HWND,
-                wintypes.DWORD
-            ]
-            setupapi.SetupDiGetClassDevsW.restype = wintypes.HANDLE
+        class_guid = string_to_guid(GUID_DEVCLASS_SYSTEM)
 
-            setupapi.SetupDiEnumDeviceInfo.argtypes = [
-                wintypes.HANDLE,
-                wintypes.DWORD,
-                ctypes.POINTER(SP_DEVINFO_DATA)
-            ]
-            setupapi.SetupDiEnumDeviceInfo.restype = wintypes.BOOL
+        hdevinfo = setupapi.SetupDiGetClassDevsW(
+            ctypes.byref(class_guid),
+            None,
+            0,
+            DIGCF_PRESENT,
+        )
 
-            setupapi.SetupDiGetDeviceInstanceIdW.argtypes = [
-                wintypes.HANDLE,
-                ctypes.POINTER(SP_DEVINFO_DATA),
-                wintypes.LPWSTR,
-                wintypes.DWORD,
-                ctypes.POINTER(wintypes.DWORD)
-            ]
-            setupapi.SetupDiGetDeviceInstanceIdW.restype = wintypes.BOOL
+        if hdevinfo == INVALID_HANDLE_VALUE:
+            print(f"获取设备信息集失败，错误码: {ctypes.get_last_error()}")
+            return None
 
-            setupapi.SetupDiDestroyDeviceInfoList.argtypes = [wintypes.HANDLE]
-            setupapi.SetupDiDestroyDeviceInfoList.restype = wintypes.BOOL
+        devinfo = SP_DEVINFO_DATA()
+        devinfo.cbSize = ctypes.sizeof(SP_DEVINFO_DATA)
+        index = 0
 
-            # 转换 GUID 字符串为 GUID 结构
-            class_guid = string_to_guid(GUID_DEVCLASS_SYSTEM)
+        addr_hex = f"{bt_address:012X}".upper()
 
-            # 获取设备信息集
-            hdevinfo = setupapi.SetupDiGetClassDevsW(
-                ctypes.byref(class_guid),
-                None,
-                0,
-                DIGCF_PRESENT,
+        while setupapi.SetupDiEnumDeviceInfo(hdevinfo, index, ctypes.byref(devinfo)):
+            devid = ctypes.create_unicode_buffer(256)
+            result = setupapi.SetupDiGetDeviceInstanceIdW(
+                hdevinfo, ctypes.byref(devinfo), devid, 256, None
             )
 
-            if hdevinfo == INVALID_HANDLE_VALUE:
-                print(f"获取设备信息集失败，错误码: {ctypes.get_last_error()}")
-                return None
+            if result:
+                instance_id = devid.value
 
-            devinfo = SP_DEVINFO_DATA()
-            devinfo.cbSize = ctypes.sizeof(SP_DEVINFO_DATA)
-            index = 0
+                if "BTHENUM\\" in instance_id and addr_hex in instance_id:
+                    setupapi.SetupDiDestroyDeviceInfoList(hdevinfo)
+                    return instance_id
 
-            # 转为 12 位大写地址（和设备实例ID一致）
-            addr_hex = f"{bt_address:012X}".upper()
-            # print(f"查找蓝牙地址: {addr_hex}")
+            index += 1
 
-            # 遍历设备
-            while setupapi.SetupDiEnumDeviceInfo(hdevinfo, index, ctypes.byref(devinfo)):
-                devid = ctypes.create_unicode_buffer(256)
-                result = setupapi.SetupDiGetDeviceInstanceIdW(
-                    hdevinfo, ctypes.byref(devinfo), devid, 256, None
-                )
-
-                if result:
-                    instance_id = devid.value
-                    # print(f"检查设备: {instance_id}")
-
-                    # 筛选：BTHENUM 且 包含蓝牙地址
-                    if "BTHENUM\\" in instance_id and addr_hex in instance_id:
-                        setupapi.SetupDiDestroyDeviceInfoList(hdevinfo)
-                        # print(f"找到匹配设备: {instance_id}")
-                        return instance_id
-
-                index += 1
-
-            setupapi.SetupDiDestroyDeviceInfoList(hdevinfo)
-            print("未找到匹配的蓝牙设备")
-            return None
-        except Exception as e:
-            print(f"错误: {e}")
-            return None
+        setupapi.SetupDiDestroyDeviceInfoList(hdevinfo)
+        print("未找到匹配的蓝牙设备")
+        return None
 
 
 async def main():

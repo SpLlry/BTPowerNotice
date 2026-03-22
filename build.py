@@ -1,47 +1,46 @@
 # -*- coding: utf-8 -*-
 import os
-import shutil  # 【重要】已添加缺失的导入
+import shutil
 import subprocess
 import sys
 
-# ================= 【配置区】请在此修改 =================
-# 1. 版本信息
-MAJOR = 0
-MINOR = 1
-PATCH = 4
-BUILD = 0
+sys.path.insert(0, os.path.dirname(__file__))
+from setting import settings
 
-# 2. 程序信息
-APP_NAME = "BTPowerNotice"
-FILE_DESC = "一款轻松查看电脑蓝牙电量的工具"
-EXE_NAME = "BTPowerNotice.exe"
-COPYRIGHT = "Copyright © 2026 Spllry"
-VERSION_FILE = "version_info.txt"  # 修正了变量名，保持前后一致
+MAJOR, MINOR, PATCH, BUILD = 0, 0, 0, 0
+version_parts = settings.APP_VERSION.split(".")
+if len(version_parts) >= 1:
+    MAJOR = int(version_parts[0]) if version_parts[0] else 0
+if len(version_parts) >= 2:
+    MINOR = int(version_parts[1]) if version_parts[1] else 0
+if len(version_parts) >= 3:
+    PATCH = int(version_parts[2]) if version_parts[2] else 0
 
-# 【新增】打包后需要复制到 dist 目录的文件/文件夹列表
-NEED_FILES = [
-    "icon",
-    "ui",
-    "config"
-]
+APP_NAME = settings.APP_NAME
+FILE_DESC = settings.APP_DESCRIPTION
+EXE_NAME = f"{APP_NAME}.exe"
+COPYRIGHT = f"Copyright © {settings.COPYRIGHT_YEAR} {settings.APP_AUTHOR}"
+VERSION_FILE = "version_info.txt"
 
-# 3. 打包配置
+NEED_FILES = ["icon", "ui", "config"]
+
 MAIN_SCRIPT = "main.py"
 PYI_ARGS = [
     "-F",
     "-w",
-    "-n", APP_NAME,
-    "-i", ".\\icon\\icon.ico",
-    "--add-data", "icon;icon",
-    "--version-file", VERSION_FILE
+    "-n",APP_NAME,
+    "-i",
+    ".\\icon\\icon.ico",
+    "--add-data",
+    "icon;icon",
+    "--version-file",
+    VERSION_FILE,
 ]
-# =========================================================
 
 VERSION_TUPLE = (MAJOR, MINOR, PATCH, BUILD)
 VERSION_STR = f"{MAJOR}.{MINOR}.{PATCH}.{BUILD}"
 DIST_FOLDER = "./dist"
 
-# --- 1. 生成 version-info.txt ---
 TEMPLATE = f"""# UTF-8
 VSVersionInfo(
   ffi=FixedFileInfo(
@@ -81,7 +80,6 @@ except Exception as e:
     sys.exit(1)
 
 
-# --- 2. 清理旧的 build/dist 目录 ---
 def clean_folder(path):
     if os.path.exists(path):
         try:
@@ -103,7 +101,6 @@ print(f"🧹 [2/5] 正在清理旧文件...")
 clean_folder("./build")
 clean_folder("./dist")
 
-# --- 3. 自动运行 PyInstaller ---
 print(f"🚀 [3/5] 正在启动 PyInstaller...")
 command = [sys.executable, "-m", "PyInstaller"] + PYI_ARGS + [MAIN_SCRIPT]
 
@@ -118,7 +115,6 @@ except FileNotFoundError:
     sys.exit(1)
 
 
-# --- 4. 【新增】复制 NEED_FILES 到 dist 目录 ---
 def copy_files_to_dist():
     print(f"📦 [5/5] 正在复制依赖文件到 {DIST_FOLDER}...")
 
@@ -130,26 +126,22 @@ def copy_files_to_dist():
             print(f"   ⚠ 源文件不存在，跳过: {src_path}")
             continue
 
-        # 确保目标目录的父文件夹存在
         dst_parent_dir = os.path.dirname(dst_path)
         if dst_parent_dir and not os.path.exists(dst_parent_dir):
             os.makedirs(dst_parent_dir, exist_ok=True)
 
         try:
             if os.path.isdir(src_path):
-                # 如果是文件夹，且目标已存在，先删除旧的
                 if os.path.exists(dst_path):
                     shutil.rmtree(dst_path)
                 shutil.copytree(src_path, dst_path)
                 print(f"   ✔ 已复制文件夹: {item}")
             else:
-                # 如果是文件
                 shutil.copy2(src_path, dst_path)
                 print(f"   ✔ 已复制文件: {item}")
         except Exception as e:
             print(f"   ❌ 复制失败 ({item}): {e}")
 
 
-# 执行复制
 copy_files_to_dist()
 print(f"\n🎉 全部流程完成！请查看 {DIST_FOLDER} 文件夹。")

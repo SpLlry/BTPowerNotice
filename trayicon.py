@@ -1,14 +1,14 @@
 import os
 import sys
 from PyQt6.QtGui import QIcon, QAction
-from PyQt6.QtWidgets import (
-    QApplication, QSystemTrayIcon, QMenu,
-    QMessageBox, QWidget
-)
+from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QMessageBox, QWidget
+from PyQt6.QtCore import QTimer, pyqtSignal
 
 from about import AboutCometDialog
+from update import CheckUpdateDialog, NoUpdateDialog
+from setting import settings
 from skin import SkinManager
-from utils import get_icon_path, check_win_notifi
+from utils import get_icon_path, check_win_notifi, http_request
 from config import create_config
 from win11toast import toast
 
@@ -17,9 +17,13 @@ from win11toast import toast
 
 
 class TrayIcon(QSystemTrayIcon):
+    skin_changed = pyqtSignal(str)
+
     def __init__(self, parent=None, skin_manager=None, config=None):
         super().__init__(parent)
         self.about = None
+        self.checkUpdateDialog = None
+        self.noUpdateDialog = None
         self.ui = parent
         self.skin_manager = skin_manager
         self.menu = QMenu()
@@ -35,16 +39,18 @@ class TrayIcon(QSystemTrayIcon):
         # 固定菜单Action（永不改变）
         self.setAction = QMenu("设置")
         self.aboutAction = QAction("关于")
+        self.checkUpdateAction = QAction("检查更新")
 
         # print(self.skin_manager.getAll())
         self.taskSkin = QMenu("任务栏样式")
-        # self.taskSkin.addAction(QAction("默认", self))
+        self.skin_actions = {}
         for skin in self.skin_manager.getAll():
             actskin = skin
             if self.config.getVal("setting", "skin") == skin:
                 actskin = f"✅{skin}"
             act = QAction(f"{actskin}", self)
             act.triggered.connect(lambda checked, s=skin: self.on_skin_selected(s))
+            self.skin_actions[skin] = act
             self.taskSkin.addAction(act)
         #  关键修复：必须用 QAction
 
@@ -55,6 +61,7 @@ class TrayIcon(QSystemTrayIcon):
 
         # 绑定信号
         self.aboutAction.triggered.connect(self.about_app)
+        self.checkUpdateAction.triggered.connect(self.check_update)
         self.quitAction.triggered.connect(self.quit_app)
 
         self.setTrayIcon()
@@ -71,6 +78,7 @@ class TrayIcon(QSystemTrayIcon):
         self.menu.addSeparator()
         self.menu.addMenu(self.setAction)
         self.menu.addAction(self.aboutAction)
+        self.menu.addAction(self.checkUpdateAction)
         self.menu.addSeparator()
         self.menu.addAction(self.quitAction)
 
@@ -80,33 +88,31 @@ class TrayIcon(QSystemTrayIcon):
         try:
             icon_path = get_icon_path("icon/icon.ico")
             self.setIcon(QIcon(icon_path))
-        except  Exception as e:
+        except Exception as e:
             print(f"托盘图标加载失败：{e}")
             # 备用系统图标
-            standard_icon = QApplication.style().standardIcon(QApplication.style().StandardIcon.SP_ComputerIcon)
+            standard_icon = QApplication.style().standardIcon(
+                QApplication.style().StandardIcon.SP_ComputerIcon
+            )
             self.setIcon(standard_icon)
 
-        self.setToolTip("蓝牙设备电量通知")
+        self.setToolTip(settings.TRAY_ICON_TOOLTIP)
         self.activated.connect(self.on_icon_clicked)
 
     # ========== 菜单点击事件 ==========
     def on_skin_selected(self, skin_name):
-
         print(f"✅ 选择皮肤：{skin_name}")
+        old_skin = self.config.getVal("setting", "skin")
+        if old_skin in self.skin_actions:
+            old_text = old_skin
+            self.skin_actions[old_skin].setText(old_text)
+
         self.config.setVal("setting", "skin", skin_name)
-        # 原生消息弹窗
-        system_enabled, silent = check_win_notifi()
-        print(system_enabled, silent)
-        if system_enabled and silent:
-            toast(
-                "切换成功",
-                "需要重启应用才能生效",
-                icon=os.path.abspath(get_icon_path("icon/icon.ico")),
-                duration="short",
-                app_id="BTPowerNotice"
-            )
-        else:
-            QMessageBox.information(self.ui, "提示", "皮肤切换成功，重启应用生效")
+        new_text = f"✅{skin_name}"
+        self.skin_actions[skin_name].setText(new_text)
+
+        self.skin_changed.emit(skin_name)
+        QMessageBox.information(self.ui, "提示", "皮肤切换成功")
 
     def update_device_info(self, device_info):
         # print("设备信息更新:", device_info)
@@ -135,7 +141,7 @@ class TrayIcon(QSystemTrayIcon):
             self.device_actions[i].setVisible(False)
 
         # 更新托盘提示文字
-        self.setToolTip("蓝牙设备电量" + tip_text)
+        self.setToolTip(settings.TRAY_ICON_TOOLTIP + tip_text)
 
     def show_main_window(self):
         if self.parent():
@@ -143,25 +149,59 @@ class TrayIcon(QSystemTrayIcon):
             self.parent().activateWindow()
 
     def on_icon_clicked(self, reason):
-        if reason in (QSystemTrayIcon.ActivationReason.Trigger, QSystemTrayIcon.ActivationReason.DoubleClick):
+        if reason in (
+            QSystemTrayIcon.ActivationReason.Trigger,
+            QSystemTrayIcon.ActivationReason.DoubleClick,
+        ):
             if not self.parent():
                 return
             self.parent().setVisible(not self.parent().isVisible())
 
     def about_app(self):
+        if self.about is not None and self.about.isVisible():
+            self.about.activateWindow()
+            return
         self.about = AboutCometDialog()
         self.about.show()
 
+    def check_update(self):
+        response = http_request("GET", settings.RELEASE_URL)
+        if response["status_code"] == 200:
+            latest_info = response["response"]
+            latest_version = latest_info.get("tag_name", "").lstrip("v")
+            current_version = settings.APP_VERSION.lstrip("v")
+            print(
+                f"最新版本: {latest_version}, 当前版本: {current_version}",
+                latest_version > current_version,
+            )
+            if latest_version > current_version:
+                self.checkUpdateDialog = CheckUpdateDialog(latest_info)
+                self.checkUpdateDialog.show()
+            else:
+                self.noUpdateDialog = NoUpdateDialog()
+                self.noUpdateDialog.show()
+        elif response["status_code"] == 404:
+            QMessageBox.information(self.ui, "提示", "404")
+        else:
+            QMessageBox.information(self.ui, "提示", "检查更新失败")
+
     def quit_app(self):
-        if QMessageBox.information(self.ui, "退出确认", "是否确认退出？",
-                                   QMessageBox.StandardButton.Yes,
-                                   QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
+        if (
+            QMessageBox.information(
+                self.ui,
+                "退出确认",
+                "是否确认退出？",
+                QMessageBox.StandardButton.Yes,
+                QMessageBox.StandardButton.No,
+            )
+            == QMessageBox.StandardButton.Yes
+        ):
             self.setVisible(False)
             QApplication.quit()
             sys.exit()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
 
@@ -171,33 +211,5 @@ if __name__ == '__main__':
 
     tray = TrayIcon(main_window, SkinManager("ui/ring/"), create_config())
     tray.show()
-
-    # 测试循环更新（模拟你的异步/定时刷新，无闪烁）
-    import random
-    import time
-    from PyQt6.QtCore import QTimer
-
-
-    def test_update():
-        if random.random() < 0.5:
-            test_devices = [
-                {"name": "设备1", "battery": random.randint(0, 100), "connected": True},
-                {"name": "设备2", "battery": random.randint(0, 100), "connected": False},
-                {"name": "设备3", "battery": random.randint(0, 100), "connected": True},
-                {"name": "设备4", "battery": random.randint(0, 100), "connected": False},
-            ]
-        else:
-            test_devices = [
-                {"name": "蓝牙耳机", "connected": True, "battery": random.randint(50, 100)},
-                {"name": "蓝牙键盘", "connected": random.choice([True, False]), "battery": random.randint(20, 80)},
-                {"name": "蓝牙鼠标", "connected": True, "battery": random.randint(30, 90)}
-            ]
-        tray.update_device_info(test_devices)
-
-
-    # 定时循环测试（1秒刷新一次，完全不闪）
-    timer = QTimer()
-    timer.timeout.connect(test_update)
-    timer.start(1000)
 
     sys.exit(app.exec())
