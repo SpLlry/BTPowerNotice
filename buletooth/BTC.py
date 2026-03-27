@@ -57,7 +57,8 @@ CM_LOCATE_DEVNODE_NORMAL = 0x00000000
 CR_SUCCESS = 0x00000000
 DEVPROP_TYPE_BYTE = 0x00000001
 DEVPKEY_BLUETOOTH_BATTERY = DEVPROPKEY(
-    fmtid=GUID(0x104EA319, 0x6EE2, 0x4701, (0xBD, 0x47, 0x8D, 0xDB, 0xF4, 0x25, 0xBB, 0xE5)),
+    fmtid=GUID(0x104EA319, 0x6EE2, 0x4701,
+               (0xBD, 0x47, 0x8D, 0xDB, 0xF4, 0x25, 0xBB, 0xE5)),
     pid=2
 )
 
@@ -121,12 +122,13 @@ class Bluetooth:
         ]
         self._setupapi.SetupDiGetDeviceInstanceIdW.restype = wintypes.BOOL
 
-        self._setupapi.SetupDiDestroyDeviceInfoList.argtypes = [wintypes.HANDLE]
+        self._setupapi.SetupDiDestroyDeviceInfoList.argtypes = [
+            wintypes.HANDLE]
         self._setupapi.SetupDiDestroyDeviceInfoList.restype = wintypes.BOOL
 
         self._setupapi_initialized = True
 
-    async def scan_classic_devices(self):
+    async def scan_btc_devices(self):
         """
         扫描经典蓝牙设备
 
@@ -141,7 +143,7 @@ class Bluetooth:
             device_info = {
                 "id": device.id,
                 "name": device.name,
-                "type": "Classic"
+                "type": "BTC"
             }
 
             btc_device = None
@@ -153,13 +155,23 @@ class Bluetooth:
                     device_info["connected"] = is_connected
                     device_info["address"] = btc_device.bluetooth_address
 
-                    ida = self.enumerate_bluetooth_system_device(btc_device.bluetooth_address)
-                    device_info["battery"] = self.get_classic_battery_level(ida)
+                    status, msg, ida = self.enumerate_bluetooth_system_device(
+                        btc_device.bluetooth_address)
+                    if status != 0:
+                        device_info["battery"] = 0
+                        continue
+                    status, msg, battery = self.get_classic_battery_level(ida)
+                    if status == 0:
+                        device_info["battery"] = battery
+            except Exception as e:
+                status = -1
+                msg = str(e)
             finally:
                 if btc_device:
                     btc_device.close()
 
-            devices_info.append(device_info)
+            devices_info.append(
+                {"code": status, "msg": msg, "data": device_info})
 
         return devices_info
 
@@ -188,7 +200,7 @@ class Bluetooth:
 
                 if result != CR_SUCCESS:
                     # return f"无法定位设备节点: {result}"、
-                    return -4
+                    return -4, f"无法定位设备节点: {result}", {}
                 # 获取电池属性
                 battery = wintypes.BYTE()
                 prop_type = wintypes.DWORD()
@@ -204,16 +216,16 @@ class Bluetooth:
                 )
                 # print(battery.value)
                 if result == CR_SUCCESS:
-                    return battery.value
+                    return 0, "ok", battery.value
                 else:
                     # return "设备不支持电池属性"
-                    return -1
+                    return -1, "设备不支持电池属性", {}
             else:
                 # return "不是经典蓝牙设备"
-                return -2
+                return -2, "不是经典蓝牙设备", {}
         except Exception as e:
             # return f"获取电量失败: {e}"
-            return -3
+            return -3, f"获取电量失败: {e}", {}
 
     def enumerate_bluetooth_system_device(self, bt_address: int) -> str | None:
         self._init_setupapi()
@@ -230,7 +242,7 @@ class Bluetooth:
 
         if hdevinfo == INVALID_HANDLE_VALUE:
             print(f"获取设备信息集失败，错误码: {ctypes.get_last_error()}")
-            return None
+            return -4, f"获取设备信息集失败，错误码: {ctypes.get_last_error()}", {}
 
         devinfo = SP_DEVINFO_DATA()
         devinfo.cbSize = ctypes.sizeof(SP_DEVINFO_DATA)
@@ -249,18 +261,18 @@ class Bluetooth:
 
                 if "BTHENUM\\" in instance_id and addr_hex in instance_id:
                     setupapi.SetupDiDestroyDeviceInfoList(hdevinfo)
-                    return instance_id
+                    return 0, "ok", instance_id
 
             index += 1
 
         setupapi.SetupDiDestroyDeviceInfoList(hdevinfo)
         print("未找到匹配的蓝牙设备")
-        return None
+        return -2, "error", "未找到匹配的蓝牙设备"
 
 
 async def main():
     btc = Bluetooth()
-    all_devices = await btc.scan_classic_devices()
+    all_devices = await btc.scan_btc_devices()
     print(all_devices)
 
 

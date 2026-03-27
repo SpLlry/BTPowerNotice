@@ -35,6 +35,7 @@ class Bluetooth:
             }
 
             ble_device = None
+            msg = ""
             try:
                 ble_device = await BluetoothLEDevice.from_id_async(device_id)
                 if ble_device:
@@ -44,17 +45,23 @@ class Bluetooth:
                     device_info["address"] = ble_device.bluetooth_address
 
                     if is_connected and device_id in self._cached_devices:
+                        status = 0
+                        msg = "已缓存电量"
                         device_info["battery"] = self._cached_devices[device_id]
                     else:
-                        battery = await self.get_ble_battery_level(ble_device)
+                        status, msg, battery = await self.get_ble_battery_level(ble_device)
                         device_info["battery"] = battery
                         if is_connected:
                             self._cached_devices[device_id] = battery
+            except Exception as e:
+                status = -1
+                msg = str(e)
             finally:
                 if ble_device:
                     ble_device.close()
 
-            devices_info.append(device_info)
+            devices_info.append(
+                {"code": status, "msg": msg, "data": device_info})
 
         self._cleanup_cache(self._max_cache_size)
         return devices_info
@@ -79,7 +86,7 @@ class Bluetooth:
                     break
 
             if not battery_service:
-                return -1
+                return -1, "未找到电池服务", {}
 
             characteristics = await battery_service.get_characteristics_async()
 
@@ -89,29 +96,19 @@ class Bluetooth:
                     break
 
             if not battery_level_char:
-                return -2
+                return -2, "未找到电池电量特征值", {}
 
             value = await battery_level_char.read_value_async()
             reader = DataReader.from_buffer(value.value)
             battery_level = reader.read_byte()
 
         except Exception as e:
-            return -3
+            return -3, f"获取电量失败: {e}]", {}
         finally:
-            if battery_level_char:
-                battery_level_char.close()
-            if characteristics:
-                for char in characteristics.characteristics:
-                    char.close()
-                characteristics.close()
-            if battery_service:
-                battery_service.close()
-            if services:
-                for service in services.services:
-                    service.close()
-                services.close()
+            # 移除对不存在的close方法的调用
+            pass
 
-        return battery_level
+        return 0, "ok", battery_level
 
 
 async def main():
