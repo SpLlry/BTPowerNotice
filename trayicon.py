@@ -1,16 +1,13 @@
-import os
 import sys
 from PyQt6.QtGui import QIcon, QAction
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QMessageBox, QWidget
-from PyQt6.QtCore import QTimer, pyqtSignal
-
+from PyQt6.QtCore import pyqtSignal
 from about import AboutCometDialog
 from update import CheckUpdateDialog, NoUpdateDialog
-from setting import settings
 from skin import SkinManager
-from utils import get_icon_path, check_win_notifi, http_request
-from config import create_config
+from utils import get_icon_path, check_win_notifi, http_request, dialog, add_startup, is_self_start, remove_startup
 from win11toast import toast
+from tools import log, config, settings
 
 
 # 兼容开发/打包的路径函数
@@ -19,12 +16,11 @@ from win11toast import toast
 class TrayIcon(QSystemTrayIcon):
     skin_changed = pyqtSignal(str)
 
-    def __init__(self, parent=None, skin_manager=None, config=None):
+    def __init__(self, parent=None, skin_manager=None):
         super().__init__(parent)
         self.about = None
         self.checkUpdateDialog = None
         self.noUpdateDialog = None
-        self.ui = parent
         self.skin_manager = skin_manager
         self.menu = QMenu()
         self.config = config
@@ -46,16 +42,27 @@ class TrayIcon(QSystemTrayIcon):
         self.skin_actions = {}
         for skin in self.skin_manager.getAll():
             actskin = skin
-            if self.config.getVal("setting", "skin") == skin:
-                actskin = f"✅{skin}"
             act = QAction(f"{actskin}", self)
-            act.triggered.connect(lambda checked, s=skin: self.on_skin_selected(s))
+            act.setCheckable(True)
+            act.setChecked(skin == self.config.getVal("Settings", "skin"))
+            act.triggered.connect(
+                lambda checked, s=skin: self.on_skin_selected(s))
             self.skin_actions[skin] = act
             self.taskSkin.addAction(act)
-        #  关键修复：必须用 QAction
-
         # # 给二级菜单添加子项（三级）
         self.setAction.addMenu(self.taskSkin)
+
+        self.debugAction = QAction("调试模式")
+        self.debugAction.setCheckable(True)
+        self.debugAction.setChecked(config.getVal("Debug", "window") == '1')
+        self.setAction.addAction(self.debugAction)
+
+        self.selfStartAction = QAction("开机自启")
+        self.selfStartAction.setCheckable(True)
+        self.selfStartAction.setChecked(is_self_start())
+        self.setAction.addAction(self.selfStartAction)
+
+        self.rebootAction = QAction("重启")
 
         self.quitAction = QAction("退出")
 
@@ -63,6 +70,9 @@ class TrayIcon(QSystemTrayIcon):
         self.aboutAction.triggered.connect(self.about_app)
         self.checkUpdateAction.triggered.connect(self.check_update)
         self.quitAction.triggered.connect(self.quit_app)
+        self.debugAction.triggered.connect(self.toggle_debug)
+        self.selfStartAction.triggered.connect(self.toggle_self_start)
+        self.rebootAction.triggered.connect(self.reboot_app)
 
         self.setTrayIcon()
 
@@ -80,8 +90,8 @@ class TrayIcon(QSystemTrayIcon):
         self.menu.addAction(self.aboutAction)
         self.menu.addAction(self.checkUpdateAction)
         self.menu.addSeparator()
+        self.menu.addAction(self.rebootAction)
         self.menu.addAction(self.quitAction)
-
         self.setContextMenu(self.menu)
 
         # 加载图标
@@ -89,30 +99,33 @@ class TrayIcon(QSystemTrayIcon):
             icon_path = get_icon_path("icon/icon.ico")
             self.setIcon(QIcon(icon_path))
         except Exception as e:
-            print(f"托盘图标加载失败：{e}")
+            log.error(f"托盘图标加载失败：{e}")
             # 备用系统图标
             standard_icon = QApplication.style().standardIcon(
                 QApplication.style().StandardIcon.SP_ComputerIcon
             )
             self.setIcon(standard_icon)
-
-        self.setToolTip(settings.TRAY_ICON_TOOLTIP)
+        attr_title = ""
+        # log.info(f"调试模式：{config.getVal('Debug', 'window')}")
+        if config.getVal("Debug", "window") == '1':
+            attr_title = "-debug模式"
+        self.setToolTip(settings.TRAY_ICON_TOOLTIP + attr_title)
         self.activated.connect(self.on_icon_clicked)
 
     # ========== 菜单点击事件 ==========
     def on_skin_selected(self, skin_name):
-        print(f"✅ 选择皮肤：{skin_name}")
-        old_skin = self.config.getVal("setting", "skin")
+        log.info(f"✅ 选择皮肤：{skin_name}")
+        old_skin = self.config.getVal("Settings", "skin")
         if old_skin in self.skin_actions:
             old_text = old_skin
             self.skin_actions[old_skin].setText(old_text)
-
-        self.config.setVal("setting", "skin", skin_name)
-        new_text = f"✅{skin_name}"
-        self.skin_actions[skin_name].setText(new_text)
-
+        # 取消其他选择状态
+        for skin in self.skin_manager.getAll():
+            if skin != skin_name:
+                self.skin_actions[skin].setChecked(False)
+        self.config.setVal("Settings", "skin", skin_name)
         self.skin_changed.emit(skin_name)
-        QMessageBox.information(self.ui, "提示", "皮肤切换成功")
+        QMessageBox.information(self.parent(), "提示", "皮肤切换成功")
 
     def update_device_info(self, device_info):
         # print("设备信息更新:", device_info)
@@ -141,7 +154,10 @@ class TrayIcon(QSystemTrayIcon):
             self.device_actions[i].setVisible(False)
 
         # 更新托盘提示文字
-        self.setToolTip(settings.TRAY_ICON_TOOLTIP + tip_text)
+        attr_title = ""
+        if config.getVal("Debug", "window") == '1':
+            attr_title = "-debug模式"
+        self.setToolTip(settings.TRAY_ICON_TOOLTIP + attr_title + tip_text)
 
     def show_main_window(self):
         if self.parent():
@@ -166,6 +182,7 @@ class TrayIcon(QSystemTrayIcon):
 
     def check_update(self):
         response = http_request("GET", settings.RELEASE_URL)
+        print(response)
         if response["status_code"] == 200:
             latest_info = response["response"]
             latest_version = latest_info.get("tag_name", "").lstrip("v")
@@ -181,24 +198,49 @@ class TrayIcon(QSystemTrayIcon):
                 self.noUpdateDialog = NoUpdateDialog()
                 self.noUpdateDialog.show()
         elif response["status_code"] == 404:
-            QMessageBox.information(self.ui, "提示", "404")
+            QMessageBox.information(self.parent(), "提示", "404")
         else:
-            QMessageBox.information(self.ui, "提示", "检查更新失败")
+            QMessageBox.information(self.parent(), "提示", "检查更新失败")
 
     def quit_app(self):
-        if (
-            QMessageBox.information(
-                self.ui,
-                "退出确认",
-                "是否确认退出？",
-                QMessageBox.StandardButton.Yes,
-                QMessageBox.StandardButton.No,
-            )
-            == QMessageBox.StandardButton.Yes
-        ):
+        ret = dialog(
+            self.parent(),
+            "退出确认",
+            "决定要退出了嘛?",
+            icon=QMessageBox.Icon.NoIcon,
+            buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        print(ret, QMessageBox.StandardButton.Yes)
+        if (ret == QMessageBox.StandardButton.Yes):
             self.setVisible(False)
             QApplication.quit()
             sys.exit()
+
+    def toggle_debug(self):
+        is_check = "0"
+        if self.debugAction.isChecked():
+            is_check = "1"
+            dialog(self.parent(), "调试模式", "已开启调试模式, 请重启后在控制台查看调试信息",
+                   QMessageBox.Icon.NoIcon, QMessageBox.StandardButton.Ok)
+
+        self.debugAction.setChecked(is_check == "1")
+        config.setVal("Debug", "window", is_check)
+
+    def toggle_self_start(self):
+        is_check = "0"
+        if self.selfStartAction.isChecked():
+            add_startup(settings.APP_NAME, "蓝牙电量监控工具 - 开机自动运行")
+            is_check = "1"
+        else:
+            remove_startup(settings.APP_NAME)
+        self.selfStartAction.setChecked(is_check == "1")
+        config.setVal("Settings", "self_start", is_check)
+
+    def reboot_app(self):
+        ret = dialog(self.parent(), "重启确认", "决定要重启了嘛?",
+                     QMessageBox.Icon.NoIcon, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if ret == QMessageBox.StandardButton.Yes:
+            self.parent().reboot()
 
 
 if __name__ == "__main__":
@@ -209,7 +251,7 @@ if __name__ == "__main__":
     main_window.setWindowTitle("蓝牙电量监控")
     main_window.resize(450, 50)
 
-    tray = TrayIcon(main_window, SkinManager("ui/ring/"), create_config())
+    tray = TrayIcon(main_window, SkinManager("ui/ring/"))
     tray.show()
 
     sys.exit(app.exec())
