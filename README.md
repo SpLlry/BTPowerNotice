@@ -13,9 +13,13 @@ BTPowerNotice是一个实用的蓝牙设备电量监控工具,基于 Python 和 
 
 
 > *托盘*
+> 
 > <img width="342" height="250" alt="image" src="https://gh-proxy.com/https://raw.githubusercontent.com/SpLlry/BTPowerNotice/refs/heads/main/resource/Snipaste_2026-03-20_17-09-08.png" />
+>
 > *任务栏*
+> 
 > <img width="318" height="92" alt="Snipaste_2026-03-17_17-19-54" src="https://gh-proxy.com/https://raw.githubusercontent.com/SpLlry/BTPowerNotice/refs/heads/main/resource/566750244-4cc02b2b-0175-42b7-9058-4ce39f48aa5a.png" />
+>
 > <img width="318" height="92" alt="Snipaste_2026-03-17_17-19-54" src="https://gh-proxy.com/https://raw.githubusercontent.com/SpLlry/BTPowerNotice/refs/heads/main/resource/Snipaste_2026-03-20_17-08-45.png" />
 
 ## 2. 核心功能
