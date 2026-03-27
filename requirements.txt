@@ -11,5 +11,5 @@ winrt-runtime>=3.0
 winrt-windows-devices-bluetooth>=3.0
 winrt-Windows.Devices==3.2.1
 winrt-Windows.Devices.Enumeration==3.2.1
+winrt-Windows.Devices.Bluetooth.GenericAttributeProfile==3.2.1
 pyinstaller~=6.19.0
-
