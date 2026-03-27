@@ -2,9 +2,51 @@ import os
 import subprocess
 import sys
 import winreg
-import yaml
 from typing import Dict, Optional, Any
 import requests
+from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtCore import Qt
+
+
+def dialog(parent, title, text, icon=QMessageBox.Icon.Question, buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No):
+    msg_box = QMessageBox(parent)
+    msg_box.setWindowTitle(title)
+    msg_box.setIcon(icon)
+    # msg_box.setStandardButtons(QMessageBox.StandardButton.Close)
+    msg_box.setWindowFlag(Qt.WindowType.Window |
+                          Qt.WindowType.WindowTitleHint |
+                          Qt.WindowType.CustomizeWindowHint |
+                          Qt.WindowType.WindowCloseButtonHint)
+
+    # msg_box.setText(f"<b>{title}</b>")
+
+    msg_box.setInformativeText(text)
+
+    # msg_box.setFixedSize(300, 200)
+    msg_box.setStandardButtons(buttons)
+
+    return msg_box.exec()
+
+
+def is_self_start() -> bool:
+    """检查是否开机自启"""
+    APP_NAME = "BTPowerNotice"
+    RUN_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
+    try:
+
+        return get_reg_value(RUN_PATH, APP_NAME) == f'"{get_exe_path()}"'
+    except winreg.WinError2:
+        return False
+
+
+def get_exe_path() -> str:
+    """获取当前程序的真实路径（开发环境 / 打包 exe 都通用）"""
+    if getattr(sys, 'frozen', False):
+        # 打包成 exe 后运行
+        return sys.executable
+    else:
+        # 开发环境运行（.py 文件）
+        return os.path.abspath(__file__)
 
 
 def get_exe_run_dir():
@@ -16,23 +58,13 @@ def get_exe_run_dir():
         # 打包为EXE：获取EXE的绝对路径
         app_path = os.path.dirname(sys.executable)
     else:
-        print(os.path.dirname(sys.executable))
+        # print(os.path.dirname(sys.executable))
         # 开发环境：获取当前.py文件的绝对路径
         app_path = os.path.dirname(os.path.abspath(__file__))
 
     # 获取文件所在的文件夹路径（即运行目录）
     # exe_dir = os.path.dirname(app_path)
     return app_path
-
-
-def get_config(config_path: str):
-    """
-    从 config.json 文件读取配置
-    :return: 配置字典
-    """
-    with open(config_path, "r", encoding="utf-8") as f:
-        config = yaml.safe_load(f)
-    return config
 
 
 def run_powershell_command(ps_script: str, to_json: bool = False) -> str:
@@ -59,30 +91,61 @@ def run_powershell_command(ps_script: str, to_json: bool = False) -> str:
         return None
 
 
-def get_reg_value(reg_path: str, reg_key: str):
+def set_reg_value(reg_path: str, reg_key: str, value: Any, value_type=winreg.REG_SZ) -> bool:
     """
-    获取注册表项的值
-    :param reg_path: 注册表项路径
-    :param reg_key: 注册表项键名
-    :return: 注册表项的值
+    通用：设置注册表值
+    :param reg_path: 注册表路径，如 r"Software\Microsoft\Windows\CurrentVersion\Run"
+    :param reg_key: 键名（项目名）
+    :param value: 要写入的值
+    :param value_type: 类型，默认字符串 REG_SZ，数字用 REG_DWORD
+    :return: 成功 True / 失败 False
     """
     try:
-        # 打开当前用户的注册表项
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path) as key:
-            # 读取TaskbarAl的DWORD值
-            value, _ = winreg.QueryValueEx(key, reg_key)
-            # print(value)
-
-            # 根据值判断对齐方式
-            return value
-
-    except FileNotFoundError:
-        # 非Windows 11系统，无此注册表项
-        return -1
+        # 打开或创建注册表项
+        key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, reg_path)
+        winreg.SetValueEx(key, reg_key, 0, value_type, value)
+        winreg.CloseKey(key)
+        return True
     except Exception as e:
-        # 其他异常（权限/系统错误）
-        print(f"获取失败：{str(e)}")
-        return -2
+        print(f"[设置注册表失败] {reg_key}：{str(e)}")
+        return False
+
+
+def del_reg_value(reg_path: str, reg_key: str) -> bool:
+    """
+    通用：删除注册表值
+    :param reg_path: 注册表路径
+    :param reg_key: 要删除的键名
+    :return: 成功 True / 失败 False
+    """
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                             reg_path, 0, winreg.KEY_WRITE)
+        winreg.DeleteValue(key, reg_key)
+        winreg.CloseKey(key)
+        return True
+    except FileNotFoundError:
+        # 本来就不存在，也算成功
+        return True
+    except Exception as e:
+        print(f"[删除注册表失败] {reg_key}：{str(e)}")
+        return False
+
+
+def get_reg_value(reg_path: str, reg_key: str, default=None) -> Any:
+    """
+    通用：读取注册表值（推荐搭配使用）
+    """
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path)
+        value, _ = winreg.QueryValueEx(key, reg_key)
+        winreg.CloseKey(key)
+        return value
+    except FileNotFoundError:
+        return default
+    except Exception as e:
+        print(f"[读取注册表失败] {reg_key}：{str(e)}")
+        return default
 
 
 def get_win11_taskbar_alignment() -> int:
@@ -174,7 +237,8 @@ def http_request(
         - error: 错误信息（失败时返回，成功时为None）
     """
     # 初始化返回结果
-    result = {"success": False, "status_code": None, "response": None, "error": None}
+    result = {"success": False, "status_code": None,
+              "response": None, "error": None}
     if headers is None:
         headers = {}
     if headers.get("User-Agent") is None:
@@ -233,5 +297,39 @@ def http_request(
     return result
 
 
+# ==================== 开机自启（带说明） ====================
+
+
+def add_startup(app_name, description):
+    """
+    添加开机自启 + 友好说明（启动项列表可见）
+    :param description: 你想显示的说明文字
+    """
+    APP_PATH = fr'"{get_exe_path()}"'
+    STARTUP_REG = r"Software\Microsoft\Windows\CurrentVersion\Run"
+    # 1. 添加程序路径（必须）
+    set_reg_value(STARTUP_REG, app_name, APP_PATH)
+
+    # 2. 添加友好说明（可选，显示在启动项里）
+    STARTUP_DESC_REG = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"
+    desc_bytes = description.encode("utf-16-le") + b"\x00\x00"
+    data = b"\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" + desc_bytes
+    set_reg_value(STARTUP_DESC_REG, app_name, data, winreg.REG_BINARY)
+    print(f"✅ 开机自启已添加：{description}")
+
+
+def remove_startup(app_name):
+    """删除开机自启（含说明）"""
+    STARTUP_REG = r"Software\Microsoft\Windows\CurrentVersion\Run"
+    del_reg_value(STARTUP_REG, app_name)
+
+    STARTUP_DESC_REG = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"
+    del_reg_value(STARTUP_DESC_REG, app_name)
+    print(f"❌ 开机自启已删除：{app_name}")
+
+
 if __name__ == "__main__":
-    print("utils.py")
+    APP_NAME = "BTPowerNotice"
+    add_startup(APP_NAME, "test")
+
+    # print("utils.py")
