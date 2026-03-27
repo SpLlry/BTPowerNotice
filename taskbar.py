@@ -5,14 +5,14 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QTo
 from PyQt6.QtCore import Qt, QTimer
 
 import utils
-from config import create_config
 from skin import SkinManager
+from tools import log, config
 
 
 class RingWidget(QMainWindow):
     MAX_DEVICES = 4
 
-    def __init__(self, config):
+    def __init__(self):
         super().__init__()
         self.config = config
         self.scale = self.screen().devicePixelRatio()
@@ -23,7 +23,7 @@ class RingWidget(QMainWindow):
         self.battery_items = {}
         self.progress_rings = []
         self.skin_manager = SkinManager("ui/ring/")
-        self.current_skin = self.config.getVal("setting", "skin")
+        self.current_skin = self.config.getVal("Settings", "skin")
 
         self._init_layout()
         self._init_window()
@@ -148,7 +148,7 @@ class RingWidget(QMainWindow):
 
             self.move(left, -int(self.task_bar.get("t") / self.scale))
         except Exception as e:
-            print(f"position error {e}")
+            log.error(f"任务栏定位错误: {e}")
 
     def get_task_bar_w11(self):
         task_bar = "Shell_TrayWnd"
@@ -189,7 +189,7 @@ class RingWidget(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = RingWidget(create_config())
+    window = RingWidget()
     window.update_device_data({
         "123": {"name": "耳机", "battery": 100, "connected": True},
         "456": {"name": "键盘", "battery": 50, "connected": True},
