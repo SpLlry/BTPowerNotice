@@ -12,13 +12,14 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFont, QCursor, QIcon
 from PyQt6.QtCore import Qt, QUrl
 
-from setting import settings
+from tools import settings
 from utils import get_icon_path
 
 
 class CheckUpdateDialog(QDialog):
     def __init__(self, latest_info=None, parent=None):
         super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_QuitOnClose, False)
         self.latest_info = latest_info or {}
         self.init_ui()
 
@@ -96,6 +97,7 @@ class CheckUpdateDialog(QDialog):
 class NoUpdateDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_QuitOnClose, False)
         self.init_ui()
 
     def init_ui(self):
