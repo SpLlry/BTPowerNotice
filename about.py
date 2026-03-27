@@ -7,13 +7,16 @@ from PyQt6.QtGui import QFont, QCursor, QIcon, QPixmap
 from PyQt6.QtCore import Qt
 
 from utils import get_icon_path
-from setting import settings
+from tools import settings
 
 
 class AboutCometDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_QuitOnClose, False)
+        self.setWindowFlags(Qt.WindowType.Window |
+                            Qt.WindowType.CustomizeWindowHint |
+                            Qt.WindowType.WindowCloseButtonHint)
         self.setWindowTitle(f"关于 {settings.APP_NAME}")
         self.setFixedSize(500, 300)
         self.setWindowIcon(QIcon(get_icon_path("icon/icon.ico")))
@@ -56,7 +59,8 @@ class AboutCometDialog(QDialog):
                      f'\nCopyright(C) {settings.COPYRIGHT_YEAR} By {settings.APP_AUTHOR}')
         auth_content_label = QLabel(auth_text)
         auth_content_label.setFont(QFont("Courier New", 16))
-        auth_content_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        auth_content_label.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         auth_layout.addWidget(auth_content_label)
 
         main_layout.addLayout(auth_layout)
@@ -65,7 +69,7 @@ class AboutCometDialog(QDialog):
         line.setFrameShape(QFrame.Shape.HLine)
         line.setFrameShadow(QFrame.Shadow.Sunken)
         main_layout.addWidget(line)
-        
+
         links_layout = QVBoxLayout()
         links_layout.setSpacing(15)
         home_layout = QHBoxLayout()
