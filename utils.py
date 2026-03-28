@@ -6,17 +6,27 @@ from typing import Dict, Optional, Any
 import requests
 from PyQt6.QtWidgets import QMessageBox
 from PyQt6.QtCore import Qt
+import winshell
+from win32com.client import Dispatch
 
 
-def dialog(parent, title, text, icon=QMessageBox.Icon.Question, buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No):
+def dialog(
+    parent,
+    title,
+    text,
+    icon=QMessageBox.Icon.Question,
+    buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+):
     msg_box = QMessageBox(parent)
     msg_box.setWindowTitle(title)
     msg_box.setIcon(icon)
     # msg_box.setStandardButtons(QMessageBox.StandardButton.Close)
-    msg_box.setWindowFlag(Qt.WindowType.Window |
-                          Qt.WindowType.WindowTitleHint |
-                          Qt.WindowType.CustomizeWindowHint |
-                          Qt.WindowType.WindowCloseButtonHint)
+    msg_box.setWindowFlag(
+        Qt.WindowType.Window
+        | Qt.WindowType.WindowTitleHint
+        | Qt.WindowType.CustomizeWindowHint
+        | Qt.WindowType.WindowCloseButtonHint
+    )
 
     # msg_box.setText(f"<b>{title}</b>")
 
@@ -28,20 +38,9 @@ def dialog(parent, title, text, icon=QMessageBox.Icon.Question, buttons=QMessage
     return msg_box.exec()
 
 
-def is_self_start() -> bool:
-    """检查是否开机自启"""
-    APP_NAME = "BTPowerNotice"
-    RUN_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
-    try:
-
-        return get_reg_value(RUN_PATH, APP_NAME) == f'"{get_exe_path()}"'
-    except winreg.WinError2:
-        return False
-
-
 def get_exe_path() -> str:
     """获取当前程序的真实路径（开发环境 / 打包 exe 都通用）"""
-    if getattr(sys, 'frozen', False):
+    if getattr(sys, "frozen", False):
         # 打包成 exe 后运行
         return sys.executable
     else:
@@ -91,7 +90,9 @@ def run_powershell_command(ps_script: str, to_json: bool = False) -> str:
         return None
 
 
-def set_reg_value(reg_path: str, reg_key: str, value: Any, value_type=winreg.REG_SZ) -> bool:
+def set_reg_value(
+    reg_path: str, reg_key: str, value: Any, value_type=winreg.REG_SZ
+) -> bool:
     """
     通用：设置注册表值
     :param reg_path: 注册表路径，如 r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -119,8 +120,7 @@ def del_reg_value(reg_path: str, reg_key: str) -> bool:
     :return: 成功 True / 失败 False
     """
     try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
-                             reg_path, 0, winreg.KEY_WRITE)
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_WRITE)
         winreg.DeleteValue(key, reg_key)
         winreg.CloseKey(key)
         return True
@@ -237,8 +237,7 @@ def http_request(
         - error: 错误信息（失败时返回，成功时为None）
     """
     # 初始化返回结果
-    result = {"success": False, "status_code": None,
-              "response": None, "error": None}
+    result = {"success": False, "status_code": None, "response": None, "error": None}
     if headers is None:
         headers = {}
     if headers.get("User-Agent") is None:
@@ -305,27 +304,58 @@ def add_startup(app_name, description):
     添加开机自启 + 友好说明（启动项列表可见）
     :param description: 你想显示的说明文字
     """
-    APP_PATH = fr'"{get_exe_path()}"'
-    STARTUP_REG = r"Software\Microsoft\Windows\CurrentVersion\Run"
-    # 1. 添加程序路径（必须）
-    set_reg_value(STARTUP_REG, app_name, APP_PATH)
 
-    # 2. 添加友好说明（可选，显示在启动项里）
-    STARTUP_DESC_REG = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"
-    desc_bytes = description.encode("utf-16-le") + b"\x00\x00"
-    data = b"\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" + desc_bytes
-    set_reg_value(STARTUP_DESC_REG, app_name, data, winreg.REG_BINARY)
-    print(f"✅ 开机自启已添加：{description}")
+    startup_folder = winshell.startup()  # 获取用户开机启动文件夹
+    shortcut_path = os.path.join(startup_folder, f"{app_name}.lnk")
+    # 检查快捷方式是否存在
+    print(shortcut_path)
+    if os.path.exists(shortcut_path):
+        print(f"⚠️ 已存在开机自启项：{app_name}")
+        return True
+
+    # 创建快捷方式
+    shell = Dispatch("WScript.Shell")
+    shortcut = shell.CreateShortCut(shortcut_path)
+    shortcut.TargetPath = get_exe_path()
+    shortcut.WorkingDirectory = os.path.dirname(get_exe_path())
+    shortcut.Description = description  # 任务管理器显示的描述
+    shortcut.save()
+    return True
 
 
 def remove_startup(app_name):
-    """删除开机自启（含说明）"""
-    STARTUP_REG = r"Software\Microsoft\Windows\CurrentVersion\Run"
-    del_reg_value(STARTUP_REG, app_name)
+    """删除开机自启（快捷方式方案，替换原注册表删除）"""
+    try:
+        # 获取用户开机启动文件夹
+        startup_folder = winshell.startup()
+        # 拼接快捷方式完整路径
+        shortcut_path = os.path.join(startup_folder, f"{app_name}.lnk")
 
-    STARTUP_DESC_REG = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"
-    del_reg_value(STARTUP_DESC_REG, app_name)
-    print(f"❌ 开机自启已删除：{app_name}")
+        # 如果快捷方式存在，执行删除
+        if os.path.exists(shortcut_path):
+            os.remove(shortcut_path)
+            print(f"❌ 开机自启已删除：{app_name}")
+        else:
+            print(f"ℹ️ 未检测到开机自启项：{app_name}")
+
+    except Exception as e:
+        print(f"❌ 删除开机自启失败：{str(e)}")
+
+
+# -------------------------- 【检查开机自启】适配快捷方式版本 --------------------------
+def is_self_start() -> bool:
+    """检查是否开机自启（快捷方式方案，替换原注册表检查）"""
+    APP_NAME = "BTPowerNotice"  # 你的应用名称（保持和你原来的一致）
+    try:
+        # 获取开机启动文件夹
+        startup_folder = winshell.startup()
+        shortcut_path = os.path.join(startup_folder, f"{APP_NAME}.lnk")
+        # 直接判断快捷方式文件是否存在 = 是否开机自启
+        return os.path.exists(shortcut_path)
+
+    except Exception as e:
+        print(f"❌ 检查开机自启状态失败：{str(e)}")
+        return False
 
 
 if __name__ == "__main__":

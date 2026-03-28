@@ -1,31 +1,34 @@
+import sys
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication
+
+# 1. 启用高DPI适配 - 必须在所有QApplication实例创建之前调用
+QApplication.setHighDpiScaleFactorRoundingPolicy(
+    Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+)
+
+sys.argv += ["--no-sandbox"]  # 核心：关闭Qt沙箱
+
 from tools import log, config, settings
 import utils
 import buletooth.BtScan
 from taskbar import RingWidget
 from trayicon import TrayIcon
-from utils import get_icon_path, get_exe_path, get_exe_run_dir
+from utils import del_reg_value, get_icon_path, get_exe_path, get_exe_run_dir
 from PyQt6.QtGui import QFont, QIcon
-from PyQt6.QtCore import Qt, pyqtSlot, QTimer
+from PyQt6.QtCore import pyqtSlot, QTimer
 from PyQt6.QtWidgets import (
-    QApplication,
     QMainWindow,
     QWidget,
     QLabel,
     QPushButton,
     QVBoxLayout,
 )
-import sys
-from PyQt6.QtWidgets import QApplication
 import ctypes
 import subprocess
 import os
 
-# 1. 启用高DPI适配
-QApplication.setHighDpiScaleFactorRoundingPolicy(
-    Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
-)
 
-sys.argv += ["--no-sandbox"]  # 核心：关闭Qt沙箱
 # ===================== 主窗口（ =====================
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -62,10 +65,9 @@ class MainWindow(QMainWindow):
         Windows 互斥体检查：确保应用只能运行一个实例
         返回 True=可以启动，False=已运行
         """
-        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         # 创建系统级互斥体
-        mutex = kernel32.CreateMutexA(
-            None, False, self.MUTEX_NAME.encode('utf-8'))
+        mutex = kernel32.CreateMutexA(None, False, self.MUTEX_NAME.encode("utf-8"))
         # 获取错误码：183 = 互斥体已存在（应用已运行）
         last_error = ctypes.get_last_error()
         return last_error != 183
@@ -182,7 +184,7 @@ class MainWindow(QMainWindow):
         解决：临时目录删除失败/DLL加载失败/winrt模块缺失/Qt插件初始化失败
         """
         try:
-            if not getattr(sys, 'frozen', False):
+            if not getattr(sys, "frozen", False):
                 log.warning("当前环境为开发环境,不支持重启")
                 return
 
@@ -211,7 +213,7 @@ class MainWindow(QMainWindow):
             """.strip()
 
             # 3. 写入 BAT 文件
-            with open(bat_path, 'w', encoding='gbk') as f:  # Windows BAT 必须用gbk编码
+            with open(bat_path, "w", encoding="gbk") as f:  # Windows BAT 必须用gbk编码
                 f.write(bat_content)
 
             # 4. 执行 BAT 脚本（后台运行，无黑窗）
@@ -251,7 +253,15 @@ def except_hook(exctype, value, tb):
 
 # =====================主程序入口 =====================
 def main():
+
+    ##此处是为了兼容0.1.6版本添加的开机启动
+    del_reg_value(f"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", settings.APP_NAME)
+    del_reg_value(
+        f"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run",
+        settings.APP_NAME,
+    )
     # 全局捕获
+
     sys.excepthook = except_hook
 
     app = QApplication(sys.argv)
@@ -264,5 +274,4 @@ def main():
 
 
 if __name__ == "__main__":
-
     main()
