@@ -254,12 +254,12 @@ def except_hook(exctype, value, tb):
 # =====================主程序入口 =====================
 def main():
 
-    ##此处是为了兼容0.1.6版本添加的开机启动
-    del_reg_value(f"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", settings.APP_NAME)
-    del_reg_value(
-        f"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run",
-        settings.APP_NAME,
-    )
+    # ##此处是为了兼容0.1.6版本添加的开机启动
+    # del_reg_value(f"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", settings.APP_NAME)
+    # del_reg_value(
+    #     f"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run",
+    #     settings.APP_NAME,
+    # )
     # 全局捕获
 
     sys.excepthook = except_hook
