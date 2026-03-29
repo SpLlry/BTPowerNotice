@@ -19,7 +19,7 @@ class RingWidget(QMainWindow):
         self.task_bar_hwnd = None
         self.sys_theme = "light"
         self.task_align = None
-        self.task_bar = self.get_task_bar_w11()
+        self.task_bar = utils.get_task_bar_w11(self.task_align)
         self.battery_items = {}
         self.progress_rings = []
         self.skin_manager = SkinManager("ui/ring/")
@@ -29,19 +29,39 @@ class RingWidget(QMainWindow):
         self._init_window()
         self._init_timer()
         self.init_rings()
-        self.set_task_align(utils.get_win11_taskbar_alignment())
+        self.update_taskbar_info(align=utils.get_win11_taskbar_alignment())
 
     def _init_layout(self):
         central_widget = QWidget()
+        # 中央部件设置为完全透明，不捕获鼠标事件
+        central_widget.setStyleSheet("background-color: rgba(255, 255, 255, 0);")
+        
+        # 创建一个水平布局作为主布局
         self.main_layout = QHBoxLayout(central_widget)
-        self.main_layout.setSpacing(4)
-        self.main_layout.setContentsMargins(0, 4, 0, 4)
+        self.main_layout.setSpacing(0)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        
+        # 创建背景部件，用于显示背景和捕获鼠标事件
+        self.background_widget = QWidget()
+        # 为背景部件设置透明背景色，确保鼠标事件能够被捕获
+        self.background_widget.setStyleSheet("background-color: rgba(255, 255, 255, 0.01);")
+        
+        # 创建圆环布局，用于放置电量圆环
+        self.rings_layout = QHBoxLayout(self.background_widget)
+        self.rings_layout.setSpacing(4)
+        self.rings_layout.setContentsMargins(0, 4, 0, 4)
+        self.rings_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        
+        # 将背景部件添加到主布局
+        self.main_layout.addWidget(self.background_widget)
+        
         self.setCentralWidget(central_widget)
 
     def _init_window(self):
         h = self.task_bar.get("h", 40) if self.task_bar else 40
         self.setFixedSize(int(320 / self.scale), h)
+        # 保留WA_TranslucentBackground属性以实现透明效果
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -88,29 +108,40 @@ class RingWidget(QMainWindow):
         h = self.task_bar.get("h", 0)
         if w > h:
             w = h - 10
+            self.setFixedSize(int(w) * 4, int(h))
 
         for i in range(self.MAX_DEVICES):
             ring_class = self.skin_manager.getSkin(self.current_skin)
             if ring_class:
-                ring = ring_class({}, (int(w - 4), int(h - 4)))
+                ring = ring_class({}, (int(w - 2), int(h - 2)))
                 ring.hide()
                 self.progress_rings.append(ring)
-                self.main_layout.addWidget(ring)
+                self.rings_layout.addWidget(ring)
 
-    def set_task_align(self, align):
-        if self.task_align == align:
+    def update_taskbar_info(self, align=None, task_bar_sys=None):
+        # 更新任务栏对齐方式
+        if align is not None and self.task_align != align:
+            log.info(f"更新任务栏对齐方式为: {align}")
+            align_flag = (
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+                if align == 0
+                else Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            )
+            self.main_layout.setAlignment(align_flag)
+            self.main_layout.update()
+            self.task_align = align
+            # 当对齐方式改变时，重新获取任务栏信息
+            self.task_bar = utils.get_task_bar_w11(align)
+        # 直接更新任务栏信息
+        elif task_bar_sys is not None and self.task_bar != task_bar_sys:
+            log.info(f"更新任务栏信息为: {task_bar_sys}")
+            self.task_bar = task_bar_sys
+        # 如果没有需要更新的，直接返回
+        else:
             return
 
-        align_flag = (
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-            if align == 0
-            else Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-        )
-        self.main_layout.setAlignment(align_flag)
-        self.main_layout.update()
-
-        self.task_align = align
-        self.task_bar = self.get_task_bar_w11()
+        # 更新窗口位置并刷新
+        # log.info(f"更新窗口位置: {task_bar_sys}")
         self.position_window()
         self.update()
 
@@ -129,7 +160,7 @@ class RingWidget(QMainWindow):
 
     def reload_rings(self):
         for ring in self.progress_rings:
-            self.main_layout.removeWidget(ring)
+            self.rings_layout.removeWidget(ring)
             ring.deleteLater()
         self.progress_rings.clear()
         self.init_rings()
@@ -141,39 +172,54 @@ class RingWidget(QMainWindow):
             if self.task_bar_hwnd != self.task_bar.get("handle"):
                 self.task_bar_hwnd = self.task_bar.get("handle")
                 win32gui.SetParent(self_hwnd, self.task_bar.get("handle"))
+                log.info(f"设置父窗口为: {self.task_bar.get('handle')}")
 
             left = self.task_bar.get("l")
             if self.task_align == 0:
-                left = int(left / self.scale) - self.width()
-
-            self.move(left, -int(self.task_bar.get("t") / self.scale))
+                left = int(left / self.scale) - int(self.width() / self.scale)
+            top = -int(self.task_bar.get("t") / self.scale)
+            log.info(
+                f"task_align:{self.task_align},left:{left},top:{top},width:{self.width()}"
+            )
+            # self.move(left, top)
+            self.setGeometry(left, top, self.width(), self.height())
         except Exception as e:
             log.error(f"任务栏定位错误: {e}")
-
-    def get_task_bar_w11(self):
-        task_bar = "Shell_TrayWnd"
-        hwnd = win32gui.FindWindow(task_bar, None)
-        h1 = hwnd
-        if self.task_align == 0:
-            h1 = win32gui.FindWindowEx(hwnd, None, "TrayNotifyWnd", None)
-        if not hwnd:
-            return None
-        left, top, right, bottom = win32gui.GetWindowRect(h1)
-        return {
-            "handle": hwnd,
-            "t": top,
-            "l": left,
-            "r": right,
-            "b": bottom,
-            "w": right - left,
-            "h": bottom - top,
-        }
 
     def update_device_data(self, device_info):
         self.battery_items = device_info
 
     def update_battery_ui(self):
         device_list = list(self.battery_items.values())
+        
+        # 计算实际显示的圆环数量
+        visible_rings = min(len(device_list), self.MAX_DEVICES)
+        
+        # 计算每个圆环的宽度
+        if visible_rings > 0:
+            w = int(self.width() / self.MAX_DEVICES)
+            h = self.task_bar.get("h", 0)
+            if w > h:
+                w = h - 10
+            
+            # 计算背景部件的宽度：圆环数量 * 圆环宽度 + (圆环数量 - 1) * 间距
+            background_width = visible_rings * w + (visible_rings - 1) * 4  # 4是间距
+            
+            # 设置背景部件的大小：宽度为计算值，高度为窗口高度
+            self.background_widget.setFixedSize(background_width, self.height())
+        else:
+            # 如果没有设备，设置背景部件为最小大小
+            self.background_widget.setFixedSize(1, self.height())
+        
+        # 根据任务栏对齐方式设置背景部件在主布局中的对齐方式
+        if self.task_align is not None:
+            main_align_flag = (
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+                if self.task_align == 0
+                else Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            )
+            self.main_layout.setAlignment(main_align_flag)
+            self.main_layout.update()
 
         for i in range(self.MAX_DEVICES):
             ring = self.progress_rings[i]
@@ -184,15 +230,21 @@ class RingWidget(QMainWindow):
                 ring.hide()
 
     def paintEvent(self, event):
+        # self.position_window()
+        if self.screen().devicePixelRatio() != self.scale:
+            self.scale = self.screen().devicePixelRatio()
+        # self.position_window()
         super().paintEvent(event)
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = RingWidget()
-    window.update_device_data({
-        "123": {"name": "耳机", "battery": 100, "connected": True},
-        "456": {"name": "键盘", "battery": 50, "connected": True},
-    })
+    window.update_device_data(
+        {
+            "123": {"name": "耳机", "battery": 100, "connected": True},
+            "456": {"name": "键盘", "battery": 50, "connected": True},
+        }
+    )
     window.show()
     sys.exit(app.exec())

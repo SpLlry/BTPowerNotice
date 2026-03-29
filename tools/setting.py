@@ -4,7 +4,7 @@ from typing import Optional
 
 class Settings(BaseSettings):
     APP_NAME: str = "BTPowerNotice"
-    APP_VERSION: str = "0.1.6"
+    APP_VERSION: str = "0.1.8"
     APP_AUTHOR: str = "SpLlry"
     APP_DESCRIPTION: str = "一款轻松查看电脑蓝牙电量的工具"
     GITHUB_URL: str = "https://github.com/SpLlry/BTPowerNotice"

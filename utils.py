@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import QMessageBox
 from PyQt6.QtCore import Qt
 import winshell
 from win32com.client import Dispatch
-
+import win32gui
 
 def dialog(
     parent,
@@ -148,6 +148,26 @@ def get_reg_value(reg_path: str, reg_key: str, default=None) -> Any:
         return default
 
 
+def get_task_bar_w11(task_align: int):
+    task_bar = "Shell_TrayWnd"
+    hwnd = win32gui.FindWindow(task_bar, None)
+    h1 = hwnd
+    if task_align == 0:
+        h1 = win32gui.FindWindowEx(hwnd, None, "TrayNotifyWnd", None)
+    if not hwnd:
+        return None
+    left, top, right, bottom = win32gui.GetWindowRect(h1)
+    return {
+        "handle": hwnd,
+        "t": top,
+        "l": left,
+        "r": right,
+        "b": bottom,
+        "w": right - left,
+        "h": bottom - top,
+    }
+
+
 def get_win11_taskbar_alignment() -> int:
     """
     获取Windows 11任务栏的对齐方式
@@ -159,7 +179,10 @@ def get_win11_taskbar_alignment() -> int:
     # 注册表固定路径
     reg_path = r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
     reg_key = "TaskbarAl"
-    return get_reg_value(reg_path, reg_key)
+    ret = get_reg_value(reg_path, reg_key)
+    if ret is None:
+        return 0
+    return ret
 
 
 def get_windows_system_theme() -> int:

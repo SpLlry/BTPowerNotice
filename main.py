@@ -14,7 +14,7 @@ import utils
 import buletooth.BtScan
 from taskbar import RingWidget
 from trayicon import TrayIcon
-from utils import del_reg_value, get_icon_path, get_exe_path, get_exe_run_dir
+from utils import get_icon_path, get_exe_path, get_exe_run_dir
 from PyQt6.QtGui import QFont, QIcon
 from PyQt6.QtCore import pyqtSlot, QTimer
 from PyQt6.QtWidgets import (
@@ -57,7 +57,7 @@ class MainWindow(QMainWindow):
 
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self.start_scan_thread)
-        self.update_timer.start(5000)
+        self.update_timer.start(2000)
         self.start_scan_thread()
 
     def _check_single_instance(self):
@@ -111,7 +111,10 @@ class MainWindow(QMainWindow):
             self.scan_thread.wait()
             self.scan_thread.deleteLater()
         task_align_type = utils.get_win11_taskbar_alignment()
-        self.task_bar.set_task_align(task_align_type)
+        task_bar_sys = utils.get_task_bar_w11(task_align_type)
+        self.task_bar.update_taskbar_info(
+            align=task_align_type, task_bar_sys=task_bar_sys
+        )
 
         self.scan_thread = buletooth.BtScan.BtScanThread(self.config)
         self.scan_thread.scan_finished.connect(self.update_device_data)
