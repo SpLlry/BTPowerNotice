@@ -1,9 +1,119 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-    <title>BTPowerNotice</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTPowerNotice - 蓝牙设备电量通知工具</title>
+    <!-- 引入Tailwind CSS（快速实现UPX同款极简样式） -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 自定义配置（匹配UPX配色/字体） -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#121212',    // 主体深色
+                        primary: '#2dd4bf', // 强调色
+                        light: '#e5e7eb'    // 文字浅色
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .text-shadow {
+                text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            }
+        }
+    </style>
 </head>
-<body>
-    <h1>Welcome to BTPowerNotice GitHub Pages</h1>
+<body class="bg-dark text-light min-h-screen flex flex-col">
+    <!-- 顶部导航栏 -->
+    <header class="w-full py-4 px-6 border-b border-gray-800">
+        <div class="max-w-4xl mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold text-primary">BTPowerNotice</h1>
+            <a href="https://github.com/SpLlry/BTPowerNotice" 
+               target="_blank" 
+               class="hover:text-primary transition-colors">
+                GitHub
+            </a>
+        </div>
+    </header>
+
+    <!-- 主内容区（核心：对标UPX居中大标题+简介） -->
+    <main class="flex-1 w-full px-6 py-16">
+        <div class="max-w-4xl mx-auto text-center">
+            <!-- 项目主标题 -->
+            <h1 class="text-[clamp(2.5rem,5vw,4rem)] font-bold mb-6 text-shadow">
+                BTPowerNotice
+            </h1>
+            <p class="text-xl md:text-2xl text-gray-300 mb-12 max-w-2xl mx-auto">
+                轻量级蓝牙设备电量实时通知工具，自动监控耳机、音箱等蓝牙设备电量
+            </p>
+
+            <!-- 功能按钮 -->
+            <div class="flex flex-col sm:flex-row gap-4 justify-center mb-20">
+                <a href="https://github.com/SpLlry/BTPowerNotice" 
+                   target="_blank"
+                   class="px-8 py-3 bg-primary text-dark font-semibold rounded-lg hover:opacity-90 transition-opacity">
+                    查看源码
+                </a>
+                <a href="https://github.com/SpLlry/BTPowerNotice/releases" 
+                   target="_blank"
+                   class="px-8 py-3 bg-gray-800 text-light font-semibold rounded-lg hover:bg-gray-700 transition-colors">
+                    下载使用
+                </a>
+            </div>
+
+            <!-- 功能特性（UPX同款简洁卡片布局） -->
+            <section class="mb-16">
+                <h2 class="text-2xl font-semibold mb-8">核心功能</h2>
+                <div class="grid md:grid-cols-3 gap-6 text-left">
+                    <div class="bg-gray-900 p-6 rounded-lg border border-gray-800">
+                        <h3 class="text-lg font-bold mb-2 text-primary">实时监控</h3>
+                        <p class="text-gray-400">自动扫描并监控已连接的蓝牙设备电量状态</p>
+                    </div>
+                    <div class="bg-gray-900 p-6 rounded-lg border border-gray-800">
+                        <h3 class="text-lg font-bold mb-2 text-primary">弹窗通知</h3>
+                        <p class="text-gray-400">低电量自动提醒，无需手动查看设备电量</p>
+                    </div>
+                    <div class="bg-gray-900 p-6 rounded-lg border border-gray-800">
+                        <h3 class="text-lg font-bold mb-2 text-primary">轻量极简</h3>
+                        <p class="text-gray-400">无广告、无后台占用，绿色开源工具</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 快速开始 -->
+            <section class="mb-16">
+                <h2 class="text-2xl font-semibold mb-6">快速开始</h2>
+                <div class="bg-gray-900 p-6 rounded-lg border border-gray-800 text-left max-w-2xl mx-auto">
+                    <p class="mb-4">1. 下载最新版本程序</p>
+                    <p class="mb-4">2. 连接你的蓝牙设备</p>
+                    <p class="mb-4">3. 运行工具，自动获取电量信息</p>
+                    <p>4. 低电量时自动接收系统通知</p>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="w-full py-6 px-6 border-t border-gray-800 text-center text-gray-500">
+        <div class="max-w-4xl mx-auto">
+            <p>BTPowerNotice © 2026 | 开源免费工具</p>
+            <p class="mt-2">
+                <a href="https://github.com/SpLlry/BTPowerNotice" class="hover:text-primary transition-colors">
+                    GitHub Repository
+                </a>
+            </p>
+        </div>
+    </footer>
 </body>
 </html>
