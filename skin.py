@@ -5,12 +5,14 @@ import importlib.util
 class SkinManager:
     """皮肤管理器，用于动态加载和管理皮肤"""
 
-    def __init__(self, skin_dir):
+    def __init__(self, skin_dir, module_name):
         self.skins = {}
 
-        self.skin_dir = skin_dir
+        # 使用绝对路径，确保在不同工作目录下都能找到皮肤文件
+        self.skin_dir = os.path.abspath(skin_dir)
+        self.module = module_name
         self.load()
-        print(self.skin_dir)
+        print(self.skin_dir, self.module)
         # skin_dir = os.path.join(os.path.dirname(__file__))
 
     def load(self):
@@ -27,13 +29,14 @@ class SkinManager:
 
                 try:
                     # 动态导入模块
-                    spec = importlib.util.spec_from_file_location(module_name, module_path)
+                    spec = importlib.util.spec_from_file_location(
+                        module_name, module_path)
                     module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(module)
 
                     # 检查模块是否包含Ring类
-                    if hasattr(module, 'Ring'):
-                        self.skins[module_name] = module.Ring
+                    if hasattr(module, self.module):
+                        self.skins[module_name] = getattr(module, self.module)
                         print(f"加载皮肤: {module_name}")
                 except Exception as e:
                     print(f"加载皮肤 {module_name} 失败: {e}")
@@ -49,4 +52,4 @@ class SkinManager:
     def reload(self):
         """重新加载所有皮肤"""
         self.skins.clear()
-        self.load_skins()
+        self.load()

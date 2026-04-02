@@ -1,0 +1,14 @@
+.idea/
+/logs/
+/dist/
+/build/
+# Python 缓存文件
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 虚拟环境（可选）
+venv/
+.env/
+.venv/
+*.spec

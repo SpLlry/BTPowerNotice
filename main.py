@@ -1,15 +1,4 @@
-import sys
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication
-
-# 1. 启用高DPI适配 - 必须在所有QApplication实例创建之前调用
-QApplication.setHighDpiScaleFactorRoundingPolicy(
-    Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
-)
-
-sys.argv += ["--no-sandbox"]  # 核心：关闭Qt沙箱
-
-from tools import log, config, settings
+from tools import log, config, settings, dc
 import utils
 import buletooth.BtScan
 from taskbar import RingWidget
@@ -27,9 +16,21 @@ from PyQt6.QtWidgets import (
 import ctypes
 import subprocess
 import os
+from dashboard import BluetoothBatteryApp
+import sys
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication
+
+# 1. 启用高DPI适配 - 必须在所有QApplication实例创建之前调用
+QApplication.setHighDpiScaleFactorRoundingPolicy(
+    Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+)
+
+sys.argv += ["--no-sandbox"]  # 核心：关闭Qt沙箱
 
 
 # ===================== 主窗口（ =====================
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -41,6 +42,7 @@ class MainWindow(QMainWindow):
         self.tray = None
         self.sys_theme = None
         self.task_bar = None
+        self.bluetooth_battery_app = None
         self.showTaskBar = self.config.getVal("Settings", "task_bar")
         self.battery_items = {}
         self.prev_device_states = {}
@@ -52,13 +54,21 @@ class MainWindow(QMainWindow):
             | Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowDoesNotAcceptFocus
         )
-        self.setWindowTitle(f"{settings.APP_NAME}-{settings.APP_DESCRIPTION}")
         self.ini_ui()
+        self.setWindowTitle(f"{settings.APP_NAME}-{settings.APP_DESCRIPTION}")
+
+        # 创建并初始化扫描线程，实现线程重用
+        self.scan_thread = buletooth.BtScan.BtScanThread(self.config)
+        self.scan_thread.scan_finished.connect(self.update_device_data)
 
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self.start_scan_thread)
         self.update_timer.start(2000)
+
+        # 启动第一次扫描
         self.start_scan_thread()
+        dc.set("config", config.all())
+        # 初始化 UI
 
     def _check_single_instance(self):
         """
@@ -67,18 +77,24 @@ class MainWindow(QMainWindow):
         """
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         # 创建系统级互斥体
-        mutex = kernel32.CreateMutexA(None, False, self.MUTEX_NAME.encode("utf-8"))
+        mutex = kernel32.CreateMutexA(
+            None, False, self.MUTEX_NAME.encode("utf-8"))
         # 获取错误码：183 = 互斥体已存在（应用已运行）
         last_error = ctypes.get_last_error()
         return last_error != 183
 
     def ini_ui(self):
+        self.bluetooth_battery_app = BluetoothBatteryApp()
+        self.bluetooth_battery_app.hide()
+
         self.task_bar = RingWidget()
         self.tray = TrayIcon(self, self.task_bar.skin_manager)
         self.tray.setTrayIcon()
         self.tray.show()
         self.tray.skin_changed.connect(self.task_bar.change_skin)
-
+    # 绑定信号（不变）
+        self.tray.mouseEntered.connect(self.show_bluetooth_window)
+        # self.tray.mouseLeft.connect(self.hide_bluetooth_window)
         # log.info(self.task_bar.skin_manager.getAll())
 
         if self.showTaskBar == "1":
@@ -96,36 +112,72 @@ class MainWindow(QMainWindow):
         layout.addWidget(label)
         layout.addWidget(btn)
 
+    def show_bluetooth_window(self):
+        show_win = self.config.getVal("Settings", "show_main") == "1"
+        if self.bluetooth_battery_app.isHidden() and show_win:
+            # 屏幕右下角定位
+            screen = QApplication.instance().primaryScreen()
+            screen_geo = screen.availableGeometry()
+            win_w = self.bluetooth_battery_app.width()
+            win_h = self.bluetooth_battery_app.height()
+
+            # 右下角，距离边缘 10px
+            x = screen_geo.right() - win_w - 1
+            y = screen_geo.bottom() - win_h - 1
+
+            self.bluetooth_battery_app.move(x, y)
+            self.bluetooth_battery_app.show()
+            self.bluetooth_battery_app.setFocus()
+            self.bluetooth_battery_app.activateWindow()
+
     def nativeEvent(self, event_type: bytes, message):
         if event_type == b"windows_generic_MSG":
             system_theme = utils.get_windows_system_theme()
             if self.sys_theme != system_theme:
                 self.sys_theme = system_theme
-                self.task_bar.set_theme(system_theme)
+                # self.task_bar.set_theme(system_theme)
+                # 发布系统主题变化
+                # dc.set("sys_theme", self.sys_theme)
         ret, voidptr = super().nativeEvent(event_type, message)
         return ret, 0
 
     # ===================== 启动线程扫描（核心） =====================
     def start_scan_thread(self):
-        if self.scan_thread and self.scan_thread.isRunning():
-            self.scan_thread.wait()
-            self.scan_thread.deleteLater()
+        # 检查线程是否正在运行，如果是则返回
+        if not self.scan_thread or not self.scan_thread.isRunning():
+            # 如果线程未运行，启动线程
+            self.scan_thread.start()
+            return
+
         task_align_type = utils.get_win11_taskbar_alignment()
         task_bar_sys = utils.get_task_bar_w11(task_align_type)
-        self.task_bar.update_taskbar_info(
-            align=task_align_type, task_bar_sys=task_bar_sys
-        )
+        if not self.sys_theme:
+            self.sys_theme = utils.get_windows_system_theme()
+        # self.task_bar.update_taskbar_info(
+        #     align=task_align_type, task_bar_sys=task_bar_sys
+        # )
+        dc.set(
+            "system", {"StartMenu": {"align": task_align_type},
+                       "task_bar": task_bar_sys,
+                       "sys_theme": self.sys_theme})
 
-        self.scan_thread = buletooth.BtScan.BtScanThread(self.config)
-        self.scan_thread.scan_finished.connect(self.update_device_data)
-        self.scan_thread.start()
+        # 发送信号触发扫描（重用线程）
+        self.scan_thread.start_scan.emit()
 
     @pyqtSlot(dict)
     def update_device_data(self, device_info: dict):
         """主线程安全更新UI"""
+        # log.info(f"更新设备数据: {device_info}")
         for addr, device in device_info.items():
-            name = device.get("name", "未知设备")
+            # print(1231, addr.upper().replace(":", ""), device)
 
+            name = config.getVal("CustomDeviceName", addr.upper().replace(":", ""),
+                                 device.get("name", "未知设备"))
+            show_device = config.getVal(
+                "CustomDeviceShow", addr.upper().replace(":", ""), "1") == "1"
+            device["name"] = name
+            device["show"] = show_device
+            # print(1232, name, addr)
             if addr not in self.prev_device_states:
                 self.prev_device_states[addr] = device
 
@@ -177,9 +229,15 @@ class MainWindow(QMainWindow):
             ]
             for key in keys_to_remove:
                 del self.prev_device_states[key]
+        # print(f"更新设备数据: {device_info}")
+        # print(device_info.values())
+        # 过滤出 show 为 True 的设备
+        filtered_devices = {addr: device for addr, device in device_info.items() if device["show"]}
+        dc.set("devices", filtered_devices)
 
-        self.tray.update_device_info(device_info.values())
-        self.task_bar.update_device_data(device_info)
+        # self.tray.update_device_info(device_info)
+        # self.task_bar.update_device_data(device_info)
+        # self.bluetooth_battery_app.update_devices(device_info)
 
     def reboot(self):
         """

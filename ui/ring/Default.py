@@ -37,7 +37,7 @@ class Ring(QWidget):
         #  # 正圆直径
         self.radius = width - 10
         self.font_size = int(width / 6)
-        print("Ring", width, height, self.font_size)
+        # print("Ring", width, height, self.font_size)
         self.bar_width = int(self.radius / 7)
 
     def set_percentage(self, value):
@@ -109,6 +109,7 @@ class Ring(QWidget):
         painter.setFont(QFont("Arial", 7, QFont.Weight.Normal))
         # 设备名区域：和圆环等宽，正下方水平居中
         name_rect = QRectF(circle_x, circle_y + side + 2, side, 12)
+        # print(name_rect)
         painter.drawText(name_rect, Qt.AlignmentFlag.AlignCenter, self.device_name)
 
 

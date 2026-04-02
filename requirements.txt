@@ -14,3 +14,4 @@ winrt-Windows.Devices.Enumeration==3.2.1
 winrt-Windows.Devices.Bluetooth.GenericAttributeProfile==3.2.1
 pyinstaller~=6.19.0
 winshell>=0.1.1
+pyqt-toast-notification>=0.1.0
