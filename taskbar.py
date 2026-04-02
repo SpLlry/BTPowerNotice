@@ -37,8 +37,11 @@ class RingWidget(QMainWindow):
         self.init_rings()
         # self.update_taskbar_info(
         #     align=self.task_align, task_bar_sys=self.task_bar)
-        self.update_taskbar_info(utils.get_win11_taskbar_alignment(
-        ), utils.get_task_bar_w11(utils.get_win11_taskbar_alignment()))
+        self.update_taskbar_info(
+            utils.get_win11_taskbar_alignment(),
+            utils.get_task_bar_w11(utils.get_win11_taskbar_alignment()),
+        )
+        self.set_theme(utils.get_windows_system_theme())
         dc.subscribe("devices", self.update_device_data)
         dc.subscribe("system", self.update_system_info)
         dc.subscribe("config", self.update_config_info)
@@ -48,8 +51,7 @@ class RingWidget(QMainWindow):
     def _init_layout(self):
         central_widget = QWidget()
         # 中央部件设置为完全透明，不捕获鼠标事件
-        central_widget.setStyleSheet(
-            "background-color: rgba(255, 255, 255, 0);")
+        central_widget.setStyleSheet("background-color: rgba(255, 255, 255, 0);")
 
         # 创建一个水平布局作为主布局
         self.main_layout = QHBoxLayout(central_widget)
@@ -121,7 +123,7 @@ class RingWidget(QMainWindow):
         self.setToolTip(tip_content.strip())
 
     def init_rings(self):
-        h = self.task_bar.get("h", 96)  # 默认为 48
+        h = self.task_bar.get("h", 48)  # 默认为 48
         w = int(self.width() / self.MAX_DEVICES)
         if w > h:
             w = h - 10
@@ -132,10 +134,10 @@ class RingWidget(QMainWindow):
         for i in range(self.MAX_DEVICES):
             ring_class = self.skin_manager.getSkin(self.current_skin)
             if ring_class:
-                ring_size = (int(w-2), int(h-2))
+                ring_size = (int(w - 2), int(h - 2))
                 # 确保大小不为负数
                 ring_size = (max(1, ring_size[0]), max(1, ring_size[1]))
-                print(ring_size, "ring_size")
+                # print(ring_size, "ring_size")
                 ring = ring_class({}, ring_size)
                 ring.hide()
                 self.progress_rings.append(ring)
@@ -156,9 +158,9 @@ class RingWidget(QMainWindow):
         # print(system_info, 111)
         task_align = system_info.get("StartMenu", {}).get("align", 0)
         task_bar = system_info.get("task_bar", {})
-        self.sys_theme = system_info.get("sys_theme", "light")
+        sys_theme = system_info.get("sys_theme", "light")
         self.update_taskbar_info(align=task_align, task_bar_sys=task_bar)
-        self.set_theme(self.sys_theme)
+        self.set_theme(sys_theme)
 
     def update_taskbar_info(self, align=None, task_bar_sys=None):
         # 更新任务栏对齐方式
@@ -193,8 +195,11 @@ class RingWidget(QMainWindow):
 
     def set_theme(self, theme):
         new_theme = "dark" if theme == 0 else "light"
+        print(new_theme, theme, "set_theme")
         if self.sys_theme == new_theme:
             return
+        # 更新主题并刷新
+        print(new_theme, "set_theme")
         self.sys_theme = new_theme
         self.update()
 
@@ -246,7 +251,10 @@ class RingWidget(QMainWindow):
 
     def update_device_data(self, device_info):
         # print(device_info)
-        self.battery_items = device_info
+        filtered_devices = {
+            addr: device for addr, device in device_info.items() if device["show"]
+        }
+        self.battery_items = filtered_devices
 
     def update_battery_ui(self):
         device_list = list(self.battery_items.values())
@@ -262,12 +270,10 @@ class RingWidget(QMainWindow):
                 w = h - 10
 
             # 计算背景部件的宽度：圆环数量 * 圆环宽度 + (圆环数量 - 1) * 间距
-            background_width = visible_rings * \
-                w + (visible_rings - 1) * 4  # 4是间距
+            background_width = visible_rings * w + (visible_rings - 1) * 4  # 4是间距
 
             # 设置背景部件的大小：宽度为计算值，高度为窗口高度
-            self.background_widget.setFixedSize(
-                background_width, self.height())
+            self.background_widget.setFixedSize(background_width, self.height())
         else:
             # 如果没有设备，设置背景部件为最小大小
             self.background_widget.setFixedSize(1, self.height())
