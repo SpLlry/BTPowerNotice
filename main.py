@@ -1,3 +1,4 @@
+from re import A
 from tools import log, config, settings, dc
 import utils
 import buletooth.BtScan
@@ -28,7 +29,7 @@ QApplication.setHighDpiScaleFactorRoundingPolicy(
 
 sys.argv += ["--no-sandbox"]  # 核心：关闭Qt沙箱
 MAX_DISPLAY_DEVICES = 4  # 最大显示设备数
-MAX_PREV_STATES = 20     # 最大历史状态数
+MAX_PREV_STATES = 20  # 最大历史状态数
 
 # ===================== 主窗口（ =====================
 
@@ -83,8 +84,7 @@ class MainWindow(QMainWindow):
         """
         ERROR_ALREADY_EXISTS = 183  # 定义常量
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        mutex = kernel32.CreateMutexA(
-            None, False, self.MUTEX_NAME.encode("utf-8"))
+        mutex = kernel32.CreateMutexA(None, False, self.MUTEX_NAME.encode("utf-8"))
 
         # 检查互斥体创建失败
         if not mutex:
@@ -105,7 +105,7 @@ class MainWindow(QMainWindow):
         self.tray.setTrayIcon()
         self.tray.show()
         self.tray.skin_changed.connect(self.task_bar.change_skin)
-    # 绑定信号（不变）
+        # 绑定信号（不变）
         self.tray.mouseEntered.connect(self.show_bluetooth_window)
         # self.tray.mouseLeft.connect(self.hide_bluetooth_window)
         # log.info(self.task_bar.skin_manager.getAll())
@@ -166,6 +166,7 @@ class MainWindow(QMainWindow):
                 self.scan_thread.finished.connect(self.on_scan_thread_finished)
 
             if not self.scan_thread.isRunning():
+                print("启动扫描线程")
                 self.scan_thread.start()
             else:
                 # 线程已运行，触发扫描信号
@@ -181,18 +182,33 @@ class MainWindow(QMainWindow):
     @pyqtSlot(dict)
     def update_device_data(self, device_info: dict):
         """主线程安全更新UI"""
+        taskbar_alignment = utils.get_win11_taskbar_alignment()
+        dc.set(
+            "system",
+            {
+                "StartMenu": {"align": taskbar_alignment},
+                "task_bar": utils.get_task_bar_w11(taskbar_alignment),
+                "sys_theme": self.sys_theme,
+            },
+        )
         # log.info(f"更新设备数据: {device_info}")
         for addr, device in device_info.items():
             # print(1231, addr.upper().replace(":", ""), device)
 
             clean_addr = addr.upper().replace(":", "")
-            name = config.getVal("CustomDeviceName",
-                                 clean_addr, device.get("name", "未知设备"))
-            show_device = config.getVal(
-                "CustomDeviceShow", clean_addr, "1") == "1"
+            name = config.getVal(
+                "CustomDeviceName", clean_addr, device.get("name", "未知设备")
+            )
+            show_device = config.getVal("CustomDeviceShow", clean_addr, "1") == "1"
             device["name"] = name
             device["show"] = show_device
-            # print(1232, name, addr)
+            # print(
+            #     1232,
+            #     name,
+            #     addr,
+            #     show_device,
+            #     config.getVal("CustomDeviceShow", clean_addr, "1"),
+            # )
             if addr not in self.prev_device_states:
                 self.prev_device_states[addr] = device
 
@@ -237,50 +253,55 @@ class MainWindow(QMainWindow):
 
         if len(self.battery_items) > MAX_DISPLAY_DEVICES:
             # 直接截断，避免转换为列表再转字典的开销
-            self.battery_items = {k: v for i, (k, v) in enumerate(
-                self.battery_items.items()) if i >= len(self.battery_items) - MAX_DISPLAY_DEVICES}
+            self.battery_items = {
+                k: v
+                for i, (k, v) in enumerate(self.battery_items.items())
+                if i >= len(self.battery_items) - MAX_DISPLAY_DEVICES
+            }
 
         if len(self.prev_device_states) > MAX_PREV_STATES:
             # 批量删除，减少循环次数
             remove_count = len(self.prev_device_states) - MAX_PREV_STATES
-            keys_to_remove = list(self.prev_device_states.keys())[
-                :remove_count]
+            keys_to_remove = list(self.prev_device_states.keys())[:remove_count]
             for key in keys_to_remove:
                 self.prev_device_states.pop(key, None)  # pop加默认值，避免KeyError
 
         # print(f"更新设备数据: {device_info}")
         # print(device_info.values())
         # 过滤出 show 为 True 的设备
-        filtered_devices = {addr: device for addr,
-                            device in device_info.items() if device["show"]}
-        dc.set("devices", filtered_devices)
+        # filtered_devices = {
+        #     addr: device for addr, device in device_info.items() if device["show"]
+        # }
+        dc.set("devices", device_info)
 
         # self.tray.update_device_info(device_info)
         # self.task_bar.update_device_data(device_info)
         # self.bluetooth_battery_app.update_devices(device_info)
+
     def closeEvent(self, event):
         """程序退出时清理资源"""
         # 停止定时器
         if self.update_timer and self.update_timer.isActive():
             self.update_timer.stop()
-        
+
         # 停止扫描线程
         if self.scan_thread and self.scan_thread.isRunning():
             self.scan_thread.quit()
             self.scan_thread.wait(1000)  # 等待1秒退出
             self.scan_thread.deleteLater()
-        
+
         # 销毁托盘图标
         if self.tray:
             self.tray.hide()
             self.tray.deleteLater()
-        
+
         # 销毁UI组件
         if self.bluetooth_battery_app:
             self.bluetooth_battery_app.close()
-        
+
         log.info("程序正常退出，资源已清理")
         event.accept()
+
     def reboot(self):
         """
         用 BAT 脚本中转重启（终极兜底方案）
