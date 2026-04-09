@@ -105,7 +105,6 @@ class MainWindow(QMainWindow):
         ERROR_ALREADY_EXISTS = 183  # 定义常量
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         mutex = kernel32.CreateMutexA(None, False, self.MUTEX_NAME.encode("utf-8"))
-        mutex = kernel32.CreateMutexA(None, False, self.MUTEX_NAME.encode("utf-8"))
 
         # 检查互斥体创建失败
         if not mutex:
@@ -126,7 +125,6 @@ class MainWindow(QMainWindow):
         self.tray.setTrayIcon()
         self.tray.show()
         self.tray.skin_changed.connect(self.task_bar.change_skin)
-        # 绑定信号（不变）
         # 绑定信号（不变）
         self.tray.mouseEntered.connect(self.show_bluetooth_window)
         # self.tray.mouseLeft.connect(self.hide_bluetooth_window)
@@ -189,7 +187,6 @@ class MainWindow(QMainWindow):
 
             if not self.scan_thread.isRunning():
                 print("启动扫描线程")
-                print("启动扫描线程")
                 self.scan_thread.start()
             else:
                 # 线程已运行，触发扫描信号
@@ -223,19 +220,8 @@ class MainWindow(QMainWindow):
                 "CustomDeviceName", clean_addr, device.get("name", "未知设备")
             )
             show_device = config.getVal("CustomDeviceShow", clean_addr, "1") == "1"
-            name = config.getVal(
-                "CustomDeviceName", clean_addr, device.get("name", "未知设备")
-            )
-            show_device = config.getVal("CustomDeviceShow", clean_addr, "1") == "1"
             device["name"] = name
             device["show"] = show_device
-            # print(
-            #     1232,
-            #     name,
-            #     addr,
-            #     show_device,
-            #     config.getVal("CustomDeviceShow", clean_addr, "1"),
-            # )
             # print(
             #     1232,
             #     name,
@@ -292,16 +278,10 @@ class MainWindow(QMainWindow):
                 for i, (k, v) in enumerate(self.battery_items.items())
                 if i >= len(self.battery_items) - MAX_DISPLAY_DEVICES
             }
-            self.battery_items = {
-                k: v
-                for i, (k, v) in enumerate(self.battery_items.items())
-                if i >= len(self.battery_items) - MAX_DISPLAY_DEVICES
-            }
 
         if len(self.prev_device_states) > MAX_PREV_STATES:
             # 批量删除，减少循环次数
             remove_count = len(self.prev_device_states) - MAX_PREV_STATES
-            keys_to_remove = list(self.prev_device_states.keys())[:remove_count]
             keys_to_remove = list(self.prev_device_states.keys())[:remove_count]
             for key in keys_to_remove:
                 self.prev_device_states.pop(key, None)  # pop加默认值，避免KeyError
@@ -318,7 +298,6 @@ class MainWindow(QMainWindow):
         # self.tray.update_device_info(device_info)
         # self.task_bar.update_device_data(device_info)
         # self.bluetooth_battery_app.update_devices(device_info)
-
 
     def closeEvent(self, event):
         """程序退出时清理资源"""
@@ -369,7 +348,6 @@ class MainWindow(QMainWindow):
 
         log.info("程序正常退出，资源已清理")
         event.accept()
-
 
     def reboot(self):
         """
