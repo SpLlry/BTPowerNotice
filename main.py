@@ -48,6 +48,8 @@ setup_high_dpi()
 
 
 sys.argv += ["--no-sandbox"]  # 核心：关闭Qt沙箱
+MAX_DISPLAY_DEVICES = 4  # 最大显示设备数
+MAX_PREV_STATES = 20     # 最大历史状态数
 
 # ===================== 主窗口（ =====================
 
@@ -202,15 +204,6 @@ class MainWindow(QMainWindow):
     @pyqtSlot(dict)
     def update_device_data(self, device_info: dict):
         """主线程安全更新UI"""
-        taskbar_alignment = get_win11_taskbar_alignment()
-        dc.set(
-            "system",
-            {
-                "StartMenu": {"align": taskbar_alignment},
-                "task_bar": get_task_bar_w11(taskbar_alignment),
-                "sys_theme": self.sys_theme,
-            },
-        )
         # log.info(f"更新设备数据: {device_info}")
         for addr, device in device_info.items():
             # print(1231, addr.upper().replace(":", ""), device)
@@ -289,11 +282,9 @@ class MainWindow(QMainWindow):
         # print(f"更新设备数据: {device_info}")
         # print(device_info.values())
         # 过滤出 show 为 True 的设备
-        # filtered_devices = {
-        #     addr: device for addr, device in device_info.items() if device["show"]
-        # }
-
-        dc.set("devices", device_info)
+        filtered_devices = {addr: device for addr,
+                            device in device_info.items() if device["show"]}
+        dc.set("devices", filtered_devices)
 
         # self.tray.update_device_info(device_info)
         # self.task_bar.update_device_data(device_info)
@@ -306,46 +297,24 @@ class MainWindow(QMainWindow):
         # 停止定时器
         if self.update_timer and self.update_timer.isActive():
             self.update_timer.stop()
-            self.update_timer.deleteLater()
-
+        
         # 停止扫描线程
         if self.scan_thread:
             if self.scan_thread.isRunning():
                 self.scan_thread.stop()
             self.scan_thread.deleteLater()
-            self.scan_thread = None
-
+        
         # 销毁托盘图标
         if self.tray:
             self.tray.hide()
             if hasattr(self.tray, "cleanup"):
                 self.tray.cleanup()
             self.tray.deleteLater()
-            self.tray = None
-
+        
         # 销毁UI组件
         if self.bluetooth_battery_app:
             self.bluetooth_battery_app.close()
-            self.bluetooth_battery_app.deleteLater()
-            self.bluetooth_battery_app = None
-
-        if self.task_bar:
-            self.task_bar.close()
-            self.task_bar.deleteLater()
-            self.task_bar = None
-
-        # 清理字典和缓存
-        self.battery_items.clear()
-        self.prev_device_states.clear()
-
-        # 强制垃圾回收
-        gc.collect()
-
-        log.info("资源清理完成")
-
-        # 停止内存监控
-        tracemalloc.stop()
-
+        
         log.info("程序正常退出，资源已清理")
         event.accept()
 

@@ -45,11 +45,8 @@ class RingWidget(QMainWindow):
         self.init_rings()
         # self.update_taskbar_info(
         #     align=self.task_align, task_bar_sys=self.task_bar)
-        self.update_taskbar_info(
-            get_win11_taskbar_alignment(),
-            get_task_bar_w11(get_win11_taskbar_alignment()),
-        )
-        self.set_theme(get_windows_system_theme())
+        self.update_taskbar_info(utils.get_win11_taskbar_alignment(
+        ), utils.get_task_bar_w11(utils.get_win11_taskbar_alignment()))
         dc.subscribe("devices", self.update_device_data)
         dc.subscribe("system", self.update_system_info)
         dc.subscribe("config", self.update_config_info)
@@ -59,8 +56,7 @@ class RingWidget(QMainWindow):
     def _init_layout(self):
         central_widget = QWidget()
         # 中央部件设置为完全透明，不捕获鼠标事件
-        central_widget.setStyleSheet(
-            "background-color: rgba(255, 255, 255, 0);")
+        central_widget.setStyleSheet("background-color: rgba(255, 255, 255, 0);")
 
         # 创建一个水平布局作为主布局
         self.main_layout = QHBoxLayout(central_widget)
@@ -204,11 +200,8 @@ class RingWidget(QMainWindow):
 
     def set_theme(self, theme):
         new_theme = "dark" if theme == 0 else "light"
-        # print(new_theme, theme, "set_theme")
         if self.sys_theme == new_theme:
             return
-        # 更新主题并刷新
-        # print(new_theme, "set_theme")
         self.sys_theme = new_theme
         self.update()
 
@@ -259,11 +252,8 @@ class RingWidget(QMainWindow):
             log.error(f"任务栏定位错误: {e}")
 
     def update_device_data(self, device_info):
-        print("device_info", device_info)
-        filtered_devices = {
-            addr: device for addr, device in device_info.items() if device["show"]
-        }
-        self.battery_items = filtered_devices
+        # print(device_info)
+        self.battery_items = device_info
 
     def update_battery_ui(self):
         device_list = list(self.battery_items.values())
@@ -279,12 +269,10 @@ class RingWidget(QMainWindow):
                 w = h - 10
 
             # 计算背景部件的宽度：圆环数量 * 圆环宽度 + (圆环数量 - 1) * 间距
-            background_width = visible_rings * \
-                w + (visible_rings - 1) * 4  # 4是间距
+            background_width = visible_rings * w + (visible_rings - 1) * 4  # 4是间距
 
             # 设置背景部件的大小：宽度为计算值，高度为窗口高度
-            self.background_widget.setFixedSize(
-                background_width, self.height())
+            self.background_widget.setFixedSize(background_width, self.height())
         else:
             # 如果没有设备，设置背景部件为最小大小
             self.background_widget.setFixedSize(1, self.height())
