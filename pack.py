@@ -4,15 +4,17 @@ import shutil
 import subprocess
 import sys
 
+from utils.tools.env import Env
+
 # 导入配置
 sys.path.insert(0, os.path.dirname(__file__))
-from tools.setting import Settings
-settings = Settings()
+from utils.tools.env import Env
+env = Env()
 
 # ===================== 核心配置（自动读取） =====================
 # 解析版本号
 MAJOR, MINOR, PATCH, BUILD = 0, 0, 0, 0
-version_parts = settings.APP_VERSION.split(".")
+version_parts = env.APP_VERSION.split(".")
 if len(version_parts) >= 1:
     MAJOR = int(version_parts[0]) if version_parts[0] else 0
 if len(version_parts) >= 2:
@@ -20,16 +22,16 @@ if len(version_parts) >= 2:
 if len(version_parts) >= 3:
     PATCH = int(version_parts[2]) if version_parts[2] else 0
 
-APP_NAME = settings.APP_NAME
-FILE_DESC = settings.APP_DESCRIPTION
-APP_AUTHOR = settings.APP_AUTHOR
+APP_NAME = env.APP_NAME
+FILE_DESC = env.APP_DESCRIPTION
+APP_AUTHOR = env.APP_AUTHOR
 EXE_NAME = f"{APP_NAME}.exe"
-COPYRIGHT = f"Copyright © {settings.COPYRIGHT_YEAR} {APP_AUTHOR}"
+COPYRIGHT = f"Copyright © {env.COPYRIGHT_YEAR} {APP_AUTHOR}"
 VERSION_FILE = "version_info.txt"
 MAIN_SCRIPT = "main.py"
 
 # 需要复制的资源文件夹
-NEED_FILES = ["icon", "ui", "config"]
+NEED_FILES = ["icon", "skin", "config"]
 
 # ===================== PyInstaller 打包参数 =====================
 # 自由切换：-F=单文件模式 / -D=单目录模式，脚本会自动识别！

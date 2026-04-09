@@ -1,13 +1,17 @@
+# fmt: off
+# 标准库导入
 import sys
+import os;sys.path.append(os.getcwd()) # 添加当前目录到 sys.path
+# fmt: on
 from PyQt6.QtWidgets import (
     QApplication, QDialog, QLabel, QPushButton,
     QVBoxLayout, QHBoxLayout, QFrame
 )
-from PyQt6.QtGui import QFont, QCursor, QIcon, QPixmap
+from PyQt6.QtGui import QFont, QIcon
 from PyQt6.QtCore import Qt, QTimer
 
 from utils import get_icon_path
-from tools import settings
+from utils.tools import env
 
 
 class AboutCometDialog(QDialog):
@@ -15,17 +19,17 @@ class AboutCometDialog(QDialog):
         super().__init__(parent)
         # 🚀 优化1：加速窗口渲染属性
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        
+
         self.setAttribute(Qt.WidgetAttribute.WA_QuitOnClose, False)
         self.setWindowFlags(Qt.WindowType.Window |
                             Qt.WindowType.CustomizeWindowHint |
                             Qt.WindowType.WindowCloseButtonHint)
-        self.setWindowTitle(f"关于 {settings.APP_NAME}")
+        self.setWindowTitle(f"关于 {env.APP_NAME}")
         self.setFixedSize(500, 300)
-        
+
         # 🚀 优化2：窗口图标预加载（极快）
         self.setWindowIcon(QIcon(get_icon_path("icon/icon.ico")))
-        
+
         # 主布局
         main_layout = QVBoxLayout()
         main_layout.setSpacing(18)
@@ -44,7 +48,7 @@ class AboutCometDialog(QDialog):
         # 标题区域
         title_layout = QVBoxLayout()
         title_layout.setSpacing(8)
-        title_label = QLabel(settings.APP_NAME)
+        title_label = QLabel(env.APP_NAME)
         title_font = QFont()
         title_font.setPointSize(24)
         title_font.setBold(True)
@@ -60,12 +64,14 @@ class AboutCometDialog(QDialog):
 
         # 版权信息
         auth_layout = QVBoxLayout()
-        auth_text = (f'{settings.APP_NAME} v{settings.APP_VERSION}\n'
-                     f'{settings.APP_DESCRIPTION}'
-                     f'\nCopyright(C) {settings.COPYRIGHT_YEAR} By {settings.APP_AUTHOR}')
+        auth_text = (f'{env.APP_NAME} v{env.APP_VERSION}\n'
+                     f'{env.APP_DESCRIPTION}'
+                     f'\nCopyright(C) {env.COPYRIGHT_YEAR} By {env.APP_AUTHOR}')
         auth_content_label = QLabel(auth_text)
-        auth_content_label.setFont(QFont("Microsoft YaHei", 11)) # 🚀 优化4：替换卡顿字体
-        auth_content_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        auth_content_label.setFont(
+            QFont("Microsoft YaHei", 11))  # 🚀 优化4：替换卡顿字体
+        auth_content_label.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         auth_layout.addWidget(auth_content_label)
         main_layout.addLayout(auth_layout)
 
@@ -74,18 +80,25 @@ class AboutCometDialog(QDialog):
         # 链接
         links_layout = QVBoxLayout()
         home_layout = QHBoxLayout()
-        githublink = QLabel(f'<a href="{settings.GITHUB_URL}">GitHub</a>')
+        githublink = QLabel(f'<a href="{env.GITHUB_URL}">GitHub</a>')
         githublink.setFont(QFont("Microsoft YaHei", 13))
         githublink.setOpenExternalLinks(True)
         githublink.setCursor(Qt.CursorShape.PointingHandCursor)
-        
-        giteelink = QLabel(f'<a href="{settings.GITEE_URL}">Gitee</a>')
+
+        giteelink = QLabel(f'<a href="{env.GITEE_URL}">Gitee</a>')
         giteelink.setFont(QFont("Microsoft YaHei", 13))
         giteelink.setOpenExternalLinks(True)
         giteelink.setCursor(Qt.CursorShape.PointingHandCursor)
-        
+
+        rewardlink = QLabel(f'<a href="{env.REWARD_URL}">打赏作者</a>')
+        rewardlink.setFont(QFont("Microsoft YaHei", 13))
+        rewardlink.setOpenExternalLinks(True)
+        rewardlink.setCursor(Qt.CursorShape.PointingHandCursor)
+
+
         home_layout.addWidget(githublink)
         home_layout.addWidget(giteelink)
+        home_layout.addWidget(rewardlink)
         home_layout.addStretch()
         links_layout.addLayout(home_layout)
         main_layout.addLayout(links_layout)
@@ -115,4 +128,5 @@ if __name__ == "__main__":
     app.setFont(QFont("Microsoft YaHei", 10))
     dialog = AboutCometDialog()
     dialog.show()
+    dialog.finished.connect(app.quit)
     sys.exit(app.exec())

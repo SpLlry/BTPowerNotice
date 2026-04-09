@@ -14,13 +14,13 @@ BTPowerNotice是一个实用的蓝牙设备电量监控工具,基于 Python 和 
 
 > *托盘*
 > 
-> <img width="342" height="250" alt="image" src="https://gh-proxy.com/https://raw.githubusercontent.com/SpLlry/BTPowerNotice/refs/heads/main/resource/Snipaste_2026-03-20_17-09-08.png" />
+> ![托盘](https://gh-proxy.com/https://raw.githubusercontent.com/SpLlry/BTPowerNotice/refs/heads/main/resource/Snipaste_2026-03-20_17-09-08.png)
 >
 > *任务栏*
 > 
-> <img width="318" height="92" alt="Snipaste_2026-03-17_17-19-54" src="https://gh-proxy.com/https://raw.githubusercontent.com/SpLlry/BTPowerNotice/refs/heads/main/resource/566750244-4cc02b2b-0175-42b7-9058-4ce39f48aa5a.png" />
+> ![任务栏样式](https://gh-proxy.com/https://raw.githubusercontent.com/SpLlry/BTPowerNotice/refs/heads/main/resource/566750244-4cc02b2b-0175-42b7-9058-4ce39f48aa5a.png)
 >
-> <img width="318" height="92" alt="Snipaste_2026-03-17_17-19-54" src="https://gh-proxy.com/https://raw.githubusercontent.com/SpLlry/BTPowerNotice/refs/heads/main/resource/Snipaste_2026-03-20_17-08-45.png" />
+> ![任务栏样式](https://gh-proxy.com/https://raw.githubusercontent.com/SpLlry/BTPowerNotice/refs/heads/main/resource/Snipaste_2026-03-20_17-08-45.png)
 
 ## 2. 核心功能
 ### 2.1 蓝牙设备扫描
@@ -121,3 +121,16 @@ BTPowerNotice是一个实用的蓝牙设备电量监控工具,基于 Python 和 
 - 增加电量历史记录和统计
 - 支持自定义通知方式
 - 跨平台支持（ macOS、Linux ）
+## 捐赠
+
+<div>开发维护不易，请我喝杯可乐吧~</div>
+
+| 支付宝                                  | 微信                                      |
+|--------------------------------------|-----------------------------------------|
+| ![支付宝扫码](https://gh-proxy.com/https://raw.githubusercontent.com/SpLlry/BTPowerNotice/refs/heads/main/resource/20260408174618_230.jpg) | ![微信扫码](https://gh-proxy.com/https://raw.githubusercontent.com/SpLlry/BTPowerNotice/refs/heads/main/resource/a3b2e1d764ad207c66f7aad7e7e6578f.jpg) |
+
+* 扫码领红包也行哦
+  
+![支付宝扫码领红包](https://gh-proxy.com/https://raw.githubusercontent.com/SpLlry/BTPowerNotice/refs/heads/main/resource/20260408174619_231_263.png)
+
+

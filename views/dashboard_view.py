@@ -1,4 +1,8 @@
+# fmt: off
+# 标准库导入
 import sys
+import os;sys.path.append(os.getcwd()) # 添加当前目录到 sys.path
+# fmt: on
 from turtle import bgcolor
 from PyQt6.QtWidgets import (
     QWidget,
@@ -12,9 +16,9 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QIcon
 from PyQt6.QtCore import Qt, QTimer
-from tools import dc
+from utils.tools import dc
 from utils import get_icon_path
-from skin import SkinManager
+from utils.skin import SkinManager
 
 
 class BluetoothBatteryApp(QMainWindow):
@@ -31,7 +35,7 @@ class BluetoothBatteryApp(QMainWindow):
 
             }
         }
-        self.skin_manager = SkinManager("ui/device/", "BTDeviceCard")
+        self.skin_manager = SkinManager("skin/device/", "BTDeviceCard")
         self.setAttribute(Qt.WidgetAttribute.WA_QuitOnClose, False)
         self.setWindowIcon(QIcon(get_icon_path("icon/icon.ico")))
         self.setWindowTitle("蓝牙设备电量")
@@ -135,7 +139,6 @@ class BluetoothBatteryApp(QMainWindow):
         self.hide_timer.timeout.connect(self.hide_with_animation)
         self.hide_timer_interval = 3000
 
-
     def update_system(self, system):
         system_theme = {0: "dark", 1: "light"}
         self.theme = system_theme[system["sys_theme"]]
@@ -213,6 +216,7 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = BluetoothBatteryApp()
     window.show()
+    window.finished.connect(app.quit)
 
     devices = {
         "123": {"name": "耳机", "battery": 100, "connected": True},
@@ -222,5 +226,5 @@ if __name__ == "__main__":
         "001": {"name": "音响", "battery": 80, "connected": False},
     }
     window.update_devices(devices)
-
+    
     sys.exit(app.exec())

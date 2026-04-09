@@ -1,34 +1,53 @@
-from tools import log, config, settings, dc
-import utils
-import buletooth.BtScan
-from taskbar import RingWidget
-from trayicon import TrayIcon
-from utils import get_icon_path, get_exe_path, get_exe_run_dir
-from PyQt6.QtGui import QFont, QIcon
-from PyQt6.QtCore import pyqtSlot, QTimer
+# format: off
+# 标准库导入
+import sys
+import os
+import subprocess
+import ctypes
+import tracemalloc
+import gc
+
+# 第三方库导入
+from PyQt6.QtCore import Qt
+
+
 from PyQt6.QtWidgets import (
+    QApplication,
     QMainWindow,
     QWidget,
     QLabel,
     QPushButton,
     QVBoxLayout,
 )
-import ctypes
-import subprocess
-import os
-from dashboard import BluetoothBatteryApp
-import sys
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication
 
-# 1. 启用高DPI适配 - 必须在所有QApplication实例创建之前调用
-QApplication.setHighDpiScaleFactorRoundingPolicy(
-    Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+# 必须在 QApplication 创建前设置，否则 QtWebEngineWidgets 会报错
+QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
+# format: on
+from PyQt6.QtCore import pyqtSlot, QTimer
+from PyQt6.QtGui import QFont, QIcon
+
+
+# 本地库导入
+from core.config.constants import MAX_DISPLAY_DEVICES, MAX_PREV_STATES
+from core import bluetooth
+from views.dashboard_view import BluetoothBatteryApp
+from views.tray_icon import TrayIcon
+from views.taskbar_view import RingWidget
+from views.components.high_dpi import setup_high_dpi
+from utils import (
+    get_icon_path,
+    get_exe_path,
+    get_exe_run_dir,
+    get_windows_system_theme,
+    get_win11_taskbar_alignment,
+    get_task_bar_w11,
 )
+from utils.tools import log, config, env, dc
+
+setup_high_dpi()
+
 
 sys.argv += ["--no-sandbox"]  # 核心：关闭Qt沙箱
-MAX_DISPLAY_DEVICES = 4  # 最大显示设备数
-MAX_PREV_STATES = 20     # 最大历史状态数
 
 # ===================== 主窗口（ =====================
 
@@ -36,8 +55,9 @@ MAX_PREV_STATES = 20     # 最大历史状态数
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.MUTEX_NAME = f"{settings.APP_NAME}"
+        self.MUTEX_NAME = f"{env.APP_NAME}"
         if not self._check_single_instance():
+            print("已运行实例，退出")
             sys.exit(0)
         self.setWindowIcon(QIcon(get_icon_path("icon/icon.ico")))
         self.config = config
@@ -57,13 +77,14 @@ class MainWindow(QMainWindow):
             | Qt.WindowType.WindowDoesNotAcceptFocus
         )
         self.ini_ui()
-        self.setWindowTitle(f"{settings.APP_NAME}-{settings.APP_DESCRIPTION}")
+        self.setWindowTitle(f"{env.APP_NAME}-{env.APP_DESCRIPTION}")
 
         # 创建并初始化扫描线程，实现线程重用
-        self.scan_thread = buletooth.BtScan.BtScanThread(self.config)
+        self.scan_thread = bluetooth.BtScan.BtScanThread(self.config)
         self.scan_thread.scan_finished.connect(self.update_device_data)
         # 从配置读取扫描间隔，默认2000ms
         try:
+            # print(self.config.getVal("Settings", "scan_interval", "2000"))
             scan_interval = int(self.config.getVal("Settings", "scan_interval", "2000"))
         except ValueError:
             scan_interval = 3000
@@ -73,8 +94,8 @@ class MainWindow(QMainWindow):
 
         # 启动第一次扫描
         self.start_scan_thread()
+
         dc.set("config", config.all())
-        # 初始化 UI
 
     def _check_single_instance(self):
         """
@@ -83,8 +104,7 @@ class MainWindow(QMainWindow):
         """
         ERROR_ALREADY_EXISTS = 183  # 定义常量
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        mutex = kernel32.CreateMutexA(
-            None, False, self.MUTEX_NAME.encode("utf-8"))
+        mutex = kernel32.CreateMutexA(None, False, self.MUTEX_NAME.encode("utf-8"))
 
         # 检查互斥体创建失败
         if not mutex:
@@ -105,7 +125,7 @@ class MainWindow(QMainWindow):
         self.tray.setTrayIcon()
         self.tray.show()
         self.tray.skin_changed.connect(self.task_bar.change_skin)
-    # 绑定信号（不变）
+        # 绑定信号（不变）
         self.tray.mouseEntered.connect(self.show_bluetooth_window)
         # self.tray.mouseLeft.connect(self.hide_bluetooth_window)
         # log.info(self.task_bar.skin_manager.getAll())
@@ -145,7 +165,7 @@ class MainWindow(QMainWindow):
 
     def nativeEvent(self, event_type: bytes, message):
         if event_type == b"windows_generic_MSG":
-            system_theme = utils.get_windows_system_theme()
+            system_theme = get_windows_system_theme()
             if self.sys_theme != system_theme:
                 self.sys_theme = system_theme
                 # self.task_bar.set_theme(system_theme)
@@ -166,6 +186,7 @@ class MainWindow(QMainWindow):
                 self.scan_thread.finished.connect(self.on_scan_thread_finished)
 
             if not self.scan_thread.isRunning():
+                print("启动扫描线程")
                 self.scan_thread.start()
             else:
                 # 线程已运行，触发扫描信号
@@ -181,18 +202,33 @@ class MainWindow(QMainWindow):
     @pyqtSlot(dict)
     def update_device_data(self, device_info: dict):
         """主线程安全更新UI"""
+        taskbar_alignment = get_win11_taskbar_alignment()
+        dc.set(
+            "system",
+            {
+                "StartMenu": {"align": taskbar_alignment},
+                "task_bar": get_task_bar_w11(taskbar_alignment),
+                "sys_theme": self.sys_theme,
+            },
+        )
         # log.info(f"更新设备数据: {device_info}")
         for addr, device in device_info.items():
             # print(1231, addr.upper().replace(":", ""), device)
 
             clean_addr = addr.upper().replace(":", "")
-            name = config.getVal("CustomDeviceName",
-                                 clean_addr, device.get("name", "未知设备"))
-            show_device = config.getVal(
-                "CustomDeviceShow", clean_addr, "1") == "1"
+            name = config.getVal(
+                "CustomDeviceName", clean_addr, device.get("name", "未知设备")
+            )
+            show_device = config.getVal("CustomDeviceShow", clean_addr, "1") == "1"
             device["name"] = name
             device["show"] = show_device
-            # print(1232, name, addr)
+            # print(
+            #     1232,
+            #     name,
+            #     addr,
+            #     show_device,
+            #     config.getVal("CustomDeviceShow", clean_addr, "1"),
+            # )
             if addr not in self.prev_device_states:
                 self.prev_device_states[addr] = device
 
@@ -237,50 +273,82 @@ class MainWindow(QMainWindow):
 
         if len(self.battery_items) > MAX_DISPLAY_DEVICES:
             # 直接截断，避免转换为列表再转字典的开销
-            self.battery_items = {k: v for i, (k, v) in enumerate(
-                self.battery_items.items()) if i >= len(self.battery_items) - MAX_DISPLAY_DEVICES}
+            self.battery_items = {
+                k: v
+                for i, (k, v) in enumerate(self.battery_items.items())
+                if i >= len(self.battery_items) - MAX_DISPLAY_DEVICES
+            }
 
         if len(self.prev_device_states) > MAX_PREV_STATES:
             # 批量删除，减少循环次数
             remove_count = len(self.prev_device_states) - MAX_PREV_STATES
-            keys_to_remove = list(self.prev_device_states.keys())[
-                :remove_count]
+            keys_to_remove = list(self.prev_device_states.keys())[:remove_count]
             for key in keys_to_remove:
                 self.prev_device_states.pop(key, None)  # pop加默认值，避免KeyError
 
         # print(f"更新设备数据: {device_info}")
         # print(device_info.values())
         # 过滤出 show 为 True 的设备
-        filtered_devices = {addr: device for addr,
-                            device in device_info.items() if device["show"]}
-        dc.set("devices", filtered_devices)
+        # filtered_devices = {
+        #     addr: device for addr, device in device_info.items() if device["show"]
+        # }
+
+        dc.set("devices", device_info)
 
         # self.tray.update_device_info(device_info)
         # self.task_bar.update_device_data(device_info)
         # self.bluetooth_battery_app.update_devices(device_info)
+
     def closeEvent(self, event):
         """程序退出时清理资源"""
+        log.info("开始清理资源...")
+
         # 停止定时器
         if self.update_timer and self.update_timer.isActive():
             self.update_timer.stop()
-        
+            self.update_timer.deleteLater()
+
         # 停止扫描线程
-        if self.scan_thread and self.scan_thread.isRunning():
-            self.scan_thread.quit()
-            self.scan_thread.wait(1000)  # 等待1秒退出
+        if self.scan_thread:
+            if self.scan_thread.isRunning():
+                self.scan_thread.stop()
             self.scan_thread.deleteLater()
-        
+            self.scan_thread = None
+
         # 销毁托盘图标
         if self.tray:
             self.tray.hide()
+            if hasattr(self.tray, "cleanup"):
+                self.tray.cleanup()
             self.tray.deleteLater()
-        
+            self.tray = None
+
         # 销毁UI组件
         if self.bluetooth_battery_app:
             self.bluetooth_battery_app.close()
-        
+            self.bluetooth_battery_app.deleteLater()
+            self.bluetooth_battery_app = None
+
+        if self.task_bar:
+            self.task_bar.close()
+            self.task_bar.deleteLater()
+            self.task_bar = None
+
+        # 清理字典和缓存
+        self.battery_items.clear()
+        self.prev_device_states.clear()
+
+        # 强制垃圾回收
+        gc.collect()
+
+        log.info("资源清理完成")
+
+        # 停止内存监控
+        tracemalloc.stop()
+
         log.info("程序正常退出，资源已清理")
         event.accept()
+
     def reboot(self):
         """
         用 BAT 脚本中转重启（终极兜底方案）
@@ -354,8 +422,33 @@ def except_hook(exctype, value, tb):
     log.error("=" * 50)
 
 
+# =====================内存使用监控 =====================
+def monitor_memory_usage():
+    """监控内存使用情况"""
+    current, peak = tracemalloc.get_traced_memory()
+    log.info(
+        f"内存使用: 当前 {current / 1024 / 1024:.2f} MB; 峰值 {peak / 1024 / 1024:.2f} MB"
+    )
+
+    # 显示前5个内存使用最多的对象
+    snapshot = tracemalloc.take_snapshot()
+    top_stats = snapshot.statistics("lineno")
+    log.info("内存使用最多的前5个对象:")
+    for stat in top_stats[:5]:
+        log.info(stat)
+
+
 # =====================主程序入口 =====================
+
+
 def main():
+    # 启动内存监控
+    tracemalloc.start()
+
+    # 定期内存监控
+    memory_timer = QTimer()
+    memory_timer.timeout.connect(monitor_memory_usage)
+    memory_timer.start(2000)  # 每分钟监控一次
 
     # ##此处是为了兼容0.1.6版本添加的开机启动
     # del_reg_value(f"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", settings.APP_NAME)
@@ -368,7 +461,7 @@ def main():
     sys.excepthook = except_hook
 
     app = QApplication(sys.argv)
-
+    setup_high_dpi()
     win = MainWindow()
     win.show()
     win.hide()

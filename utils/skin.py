@@ -12,7 +12,7 @@ class SkinManager:
         self.skin_dir = os.path.abspath(skin_dir)
         self.module = module_name
         self.load()
-        print(self.skin_dir, self.module)
+        # print(self.skin_dir, self.module)
         # skin_dir = os.path.join(os.path.dirname(__file__))
 
     def load(self):
@@ -37,7 +37,7 @@ class SkinManager:
                     # 检查模块是否包含Ring类
                     if hasattr(module, self.module):
                         self.skins[module_name] = getattr(module, self.module)
-                        print(f"加载皮肤: {module_name}")
+                        # print(f"加载皮肤: {module_name}")
                 except Exception as e:
                     print(f"加载皮肤 {module_name} 失败: {e}")
 

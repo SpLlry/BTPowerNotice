@@ -1,3 +1,13 @@
+# fmt: off
+# 标准库导入
+import sys
+import os;sys.path.append(os.getcwd()) # 添加当前目录到 sys.path
+# fmt: on
+
+
+# 第三方库导入
+from PyQt6.QtGui import QFont, QIcon
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QDialog,
     QTabWidget,
@@ -14,13 +24,11 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QStyledItemDelegate,
 )
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont, QIcon
-from tools import config, dc, settings, show_toast
 
-import sys
-from skin import SkinManager
+# 本地库导入
 from utils import get_icon_path, is_self_start, add_startup, remove_startup
+from utils.skin import SkinManager
+from utils.tools import config, dc, env, show_toast, set_log_file, set_log_window
 
 
 class ComboBoxFontDelegate(QStyledItemDelegate):
@@ -223,6 +231,7 @@ class SettingsWindow(QDialog):
 
         # ========== 样式设置 ==========
         title1 = QLabel("🎨 样式设置")
+        title1.setFixedHeight(24)
         title1.setStyleSheet("font-size:14px; font-weight:bold;")
         lay.addWidget(title1)
 
@@ -233,7 +242,8 @@ class SettingsWindow(QDialog):
         task_label.setFixedWidth(80)  # 固定标签宽度，对齐更整齐
         task_label.setFixedHeight(24)  # 代码强制固定高度，保持与下拉框一致高度
         self.task_combo = QComboBox()
-        self.task_combo.addItems(SkinManager("ui/ring/", "Ring").getAll())
+        self.task_combo.addItems(SkinManager(
+            "skin/ring/", "Ring").getAll())
         self.task_combo.setFixedHeight(24)  # 代码强制固定高度
         self.task_combo.setItemDelegate(ComboBoxFontDelegate())
         task_layout.addWidget(task_label)
@@ -248,7 +258,7 @@ class SettingsWindow(QDialog):
         main_label.setFixedHeight(24)  # 代码强制固定高度，保持与下拉框一致高度
         self.main_combo = QComboBox()
         self.main_combo.addItems(SkinManager(
-            "ui/device/", "BTDeviceCard").getAll())
+            "skin/device/", "BTDeviceCard").getAll())
         self.main_combo.setItemDelegate(ComboBoxFontDelegate())
         self.main_combo.setFixedHeight(24)  # 代码强制固定高度
         main_layout.addWidget(main_label)
@@ -257,6 +267,7 @@ class SettingsWindow(QDialog):
 
         # ========== 显示设置 ==========
         title2 = QLabel("👁 显示设置")
+        title2.setFixedHeight(24)
         title2.setStyleSheet("font-size:14px; font-weight:bold;")
         lay.addWidget(title2)
 
@@ -266,12 +277,16 @@ class SettingsWindow(QDialog):
         self.show_main.setFixedHeight(24)
         self.show_debug = QCheckBox("开启调试模式")
         self.show_debug.setFixedHeight(24)
+        self.output_log = QCheckBox("打开日志记录")
+        self.output_log.setFixedHeight(24)
         lay.addWidget(self.show_task)
         lay.addWidget(self.show_main)
         lay.addWidget(self.show_debug)
+        lay.addWidget(self.output_log)
 
         # ========== 启动设置 ==========
         title3 = QLabel("🚀 启动设置")
+        title3.setFixedHeight(24)
         title3.setStyleSheet("font-size:14px; font-weight:bold;")
         lay.addWidget(title3)
 
@@ -334,6 +349,8 @@ class SettingsWindow(QDialog):
             "Settings", "show_main", "1") == "1")
         self.show_debug.setChecked(
             config.getVal("Debug", "window", "0") == "1")
+        self.output_log.setChecked(
+            config.getVal("Debug", "output", "0") == "1")
 
         # 绑定保存
         self.task_combo.currentTextChanged.connect(
@@ -350,17 +367,26 @@ class SettingsWindow(QDialog):
             lambda v: config.setVal("Settings", "show_main", "1" if v else "0")
         )
         self.show_debug.clicked.connect(lambda v: self.show_debug_set(v))
+        self.output_log.clicked.connect(lambda v: self.output_log_set(v))
 
     def show_debug_set(self, checked):
         config.setVal("Debug", "window", "1" if checked else "0")
+
+        set_log_window(checked)
         if checked:
-            show_toast(self, "提示", "调试模式已开启,请重启应用")
+            show_toast(self, "提示", "调试模式已开启")
+
+    def output_log_set(self, checked):
+        config.setVal("Debug", "output", "1" if checked else "0")
+        set_log_file(checked)
+        if checked:
+            show_toast(self, "提示", "日志记录已开启")
 
     def save_startup(self, checked):
         if checked:
-            add_startup(settings.APP_NAME, "蓝牙电量监控工具 - 开机自动运行")
+            add_startup(env.APP_NAME, "蓝牙电量监控工具 - 开机自动运行")
         else:
-            remove_startup(settings.APP_NAME)
+            remove_startup(env.APP_NAME)
         config.setVal("Settings", "self_start", "1" if checked else "0")
 
     def load_device_from_data(self):
@@ -397,6 +423,7 @@ class SettingsWindow(QDialog):
 
 
 if __name__ == "__main__":
+
     app = QApplication(sys.argv)
     # 给应用设置全局字体，避免系统字体干扰
     app.setFont(QFont("Microsoft YaHei", 10))
