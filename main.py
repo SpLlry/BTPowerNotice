@@ -48,8 +48,6 @@ setup_high_dpi()
 
 
 sys.argv += ["--no-sandbox"]  # 核心：关闭Qt沙箱
-MAX_DISPLAY_DEVICES = 4  # 最大显示设备数
-MAX_PREV_STATES = 20     # 最大历史状态数
 
 # ===================== 主窗口（ =====================
 
@@ -107,6 +105,7 @@ class MainWindow(QMainWindow):
         ERROR_ALREADY_EXISTS = 183  # 定义常量
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         mutex = kernel32.CreateMutexA(None, False, self.MUTEX_NAME.encode("utf-8"))
+        mutex = kernel32.CreateMutexA(None, False, self.MUTEX_NAME.encode("utf-8"))
 
         # 检查互斥体创建失败
         if not mutex:
@@ -127,6 +126,7 @@ class MainWindow(QMainWindow):
         self.tray.setTrayIcon()
         self.tray.show()
         self.tray.skin_changed.connect(self.task_bar.change_skin)
+        # 绑定信号（不变）
         # 绑定信号（不变）
         self.tray.mouseEntered.connect(self.show_bluetooth_window)
         # self.tray.mouseLeft.connect(self.hide_bluetooth_window)
@@ -189,6 +189,7 @@ class MainWindow(QMainWindow):
 
             if not self.scan_thread.isRunning():
                 print("启动扫描线程")
+                print("启动扫描线程")
                 self.scan_thread.start()
             else:
                 # 线程已运行，触发扫描信号
@@ -204,6 +205,15 @@ class MainWindow(QMainWindow):
     @pyqtSlot(dict)
     def update_device_data(self, device_info: dict):
         """主线程安全更新UI"""
+        taskbar_alignment = get_win11_taskbar_alignment()
+        dc.set(
+            "system",
+            {
+                "StartMenu": {"align": taskbar_alignment},
+                "task_bar": get_task_bar_w11(taskbar_alignment),
+                "sys_theme": self.sys_theme,
+            },
+        )
         # log.info(f"更新设备数据: {device_info}")
         for addr, device in device_info.items():
             # print(1231, addr.upper().replace(":", ""), device)
@@ -213,8 +223,19 @@ class MainWindow(QMainWindow):
                 "CustomDeviceName", clean_addr, device.get("name", "未知设备")
             )
             show_device = config.getVal("CustomDeviceShow", clean_addr, "1") == "1"
+            name = config.getVal(
+                "CustomDeviceName", clean_addr, device.get("name", "未知设备")
+            )
+            show_device = config.getVal("CustomDeviceShow", clean_addr, "1") == "1"
             device["name"] = name
             device["show"] = show_device
+            # print(
+            #     1232,
+            #     name,
+            #     addr,
+            #     show_device,
+            #     config.getVal("CustomDeviceShow", clean_addr, "1"),
+            # )
             # print(
             #     1232,
             #     name,
@@ -271,10 +292,16 @@ class MainWindow(QMainWindow):
                 for i, (k, v) in enumerate(self.battery_items.items())
                 if i >= len(self.battery_items) - MAX_DISPLAY_DEVICES
             }
+            self.battery_items = {
+                k: v
+                for i, (k, v) in enumerate(self.battery_items.items())
+                if i >= len(self.battery_items) - MAX_DISPLAY_DEVICES
+            }
 
         if len(self.prev_device_states) > MAX_PREV_STATES:
             # 批量删除，减少循环次数
             remove_count = len(self.prev_device_states) - MAX_PREV_STATES
+            keys_to_remove = list(self.prev_device_states.keys())[:remove_count]
             keys_to_remove = list(self.prev_device_states.keys())[:remove_count]
             for key in keys_to_remove:
                 self.prev_device_states.pop(key, None)  # pop加默认值，避免KeyError
@@ -282,13 +309,16 @@ class MainWindow(QMainWindow):
         # print(f"更新设备数据: {device_info}")
         # print(device_info.values())
         # 过滤出 show 为 True 的设备
-        filtered_devices = {addr: device for addr,
-                            device in device_info.items() if device["show"]}
-        dc.set("devices", filtered_devices)
+        # filtered_devices = {
+        #     addr: device for addr, device in device_info.items() if device["show"]
+        # }
+
+        dc.set("devices", device_info)
 
         # self.tray.update_device_info(device_info)
         # self.task_bar.update_device_data(device_info)
         # self.bluetooth_battery_app.update_devices(device_info)
+
 
     def closeEvent(self, event):
         """程序退出时清理资源"""
@@ -297,26 +327,49 @@ class MainWindow(QMainWindow):
         # 停止定时器
         if self.update_timer and self.update_timer.isActive():
             self.update_timer.stop()
-        
+            self.update_timer.deleteLater()
+
         # 停止扫描线程
         if self.scan_thread:
             if self.scan_thread.isRunning():
                 self.scan_thread.stop()
             self.scan_thread.deleteLater()
-        
+            self.scan_thread = None
+
         # 销毁托盘图标
         if self.tray:
             self.tray.hide()
             if hasattr(self.tray, "cleanup"):
                 self.tray.cleanup()
             self.tray.deleteLater()
-        
+            self.tray = None
+
         # 销毁UI组件
         if self.bluetooth_battery_app:
             self.bluetooth_battery_app.close()
-        
+            self.bluetooth_battery_app.deleteLater()
+            self.bluetooth_battery_app = None
+
+        if self.task_bar:
+            self.task_bar.close()
+            self.task_bar.deleteLater()
+            self.task_bar = None
+
+        # 清理字典和缓存
+        self.battery_items.clear()
+        self.prev_device_states.clear()
+
+        # 强制垃圾回收
+        gc.collect()
+
+        log.info("资源清理完成")
+
+        # 停止内存监控
+        tracemalloc.stop()
+
         log.info("程序正常退出，资源已清理")
         event.accept()
+
 
     def reboot(self):
         """
