@@ -8,3 +8,4 @@ def setup_high_dpi():
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)

@@ -1,12 +1,13 @@
-from winrt.windows.devices.bluetooth import BluetoothDevice, BluetoothLEDevice, BluetoothConnectionStatus
+from winrt.windows.devices.bluetooth import BluetoothDevice, BluetoothConnectionStatus
 from winrt.windows.devices.enumeration import DeviceInformation
-from winrt.windows.storage.streams import DataReader
 import asyncio
 import ctypes
 from ctypes import wintypes
+from typing import List, Dict, Tuple, Union, Optional, Any
 
 
 class GUID(ctypes.Structure):
+    """GUID 结构"""
     _fields_ = [
         ("Data1", wintypes.DWORD),
         ("Data2", wintypes.WORD),
@@ -16,6 +17,7 @@ class GUID(ctypes.Structure):
 
 
 class DEVPROPKEY(ctypes.Structure):
+    """设备属性键结构"""
     _fields_ = [
         ("fmtid", GUID),
         ("pid", wintypes.DWORD)
@@ -23,6 +25,7 @@ class DEVPROPKEY(ctypes.Structure):
 
 
 class SP_DEVINFO_DATA(ctypes.Structure):
+    """设备信息数据结构"""
     _fields_ = [
         ("cbSize", wintypes.DWORD),
         ("ClassGuid", GUID),
@@ -31,8 +34,18 @@ class SP_DEVINFO_DATA(ctypes.Structure):
     ]
 
 
-def string_to_guid(guid_str):
-    """将字符串格式的 GUID 转换为 GUID 结构"""
+def string_to_guid(guid_str: str) -> GUID:
+    """将字符串格式的 GUID 转换为 GUID 结构
+    
+    Args:
+        guid_str: 字符串格式的 GUID
+        
+    Returns:
+        GUID: GUID 结构
+        
+    Raises:
+        ValueError: GUID 格式无效
+    """
     # 移除大括号并分割
     guid_str = guid_str.strip('{}')
     parts = guid_str.split('-')
@@ -69,11 +82,18 @@ INVALID_HANDLE_VALUE = wintypes.HANDLE(-1).value
 
 
 class Bluetooth:
+    """经典蓝牙设备管理类
+    
+    负责扫描经典蓝牙设备、获取设备信息和电量
+    """
+    
     def __init__(self):
-        self.ble_devices = []
+        """初始化蓝牙管理器"""
         self._setupapi = None
         self._setupapi_initialized = False
-        """初始化蓝牙管理器"""
+        self._cached_battery = {}
+        self._max_cache_size = 20
+        
         # 加载 CfgMgr32.dll
         self.cfgmgr32 = ctypes.WinDLL("CfgMgr32.dll")
         # 设置函数参数和返回类型
@@ -94,9 +114,11 @@ class Bluetooth:
         ]
         self.cfgmgr32.CM_Get_DevNode_PropertyW.restype = wintypes.DWORD
 
-    def _init_setupapi(self):
+    def _init_setupapi(self) -> None:
+        """初始化 setupapi.dll"""
         if self._setupapi_initialized:
             return
+        
         self._setupapi = ctypes.WinDLL("setupapi.dll", use_last_error=True)
         self._setupapi.SetupDiGetClassDevsW.argtypes = [
             ctypes.POINTER(GUID),
@@ -128,67 +150,89 @@ class Bluetooth:
 
         self._setupapi_initialized = True
 
-    async def scan_btc_devices(self):
-        """
-        扫描经典蓝牙设备
-
-        Returns:
-            list: 经典蓝牙设备信息列表
-        """
-        devices_info = []
-        btc_selector = BluetoothDevice.get_device_selector()
-        btc_devices = await DeviceInformation.find_all_async_aqs_filter(btc_selector)
-
-        for device in btc_devices:
-            device_info = {
-                "id": device.id,
-                "name": device.name,
-                "type": "BTC"
-            }
-
-            btc_device = None
-            try:
-                btc_device = await BluetoothDevice.from_id_async(device.id)
-                if btc_device:
-                    status = btc_device.connection_status
-                    is_connected = status == BluetoothConnectionStatus.CONNECTED
-                    device_info["connected"] = is_connected
-                    device_info["address"] = btc_device.bluetooth_address
-
-                    status, msg, ida = self.enumerate_bluetooth_system_device(
-                        btc_device.bluetooth_address)
-                    if status != 0:
-                        device_info["battery"] = 0
-                        continue
-                    status, msg, battery = self.get_classic_battery_level(ida)
-                    if status == 0:
-                        device_info["battery"] = battery
-            except Exception as e:
-                status = -1
-                msg = str(e)
-            finally:
-                if btc_device:
-                    btc_device.close()
-
-            devices_info.append(
-                {"code": status, "msg": msg, "data": device_info})
-
-        return devices_info
-
-    def get_classic_battery_level(self, device_id):
-        """
-        获取经典蓝牙设备的电量水平
-
+    def _is_device_connected(self, btc_device: BluetoothDevice) -> bool:
+        """检查设备连接状态
+        
         Args:
-            device_id: 设备 ID
-
+            btc_device: 蓝牙设备实例
+            
         Returns:
-            str: 电量百分比或错误信息
+            bool: 是否已连接
         """
         try:
+            return btc_device.connection_status == BluetoothConnectionStatus.CONNECTED
+        except Exception as e:
+            print(f"检查连接状态失败: {e}")
+            return False
+
+    def _get_device_basic_info(self, device: DeviceInformation, btc_device: BluetoothDevice) -> Dict[str, Any]:
+        """构建设备基本信息
+        
+        Args:
+            device: 设备信息对象
+            btc_device: 蓝牙设备对象
+            
+        Returns:
+            dict: 设备基本信息字典
+        """
+        return {
+            "id": device.id,
+            "name": device.name,
+            "type": "BTC",
+            "address": btc_device.bluetooth_address,
+            "connected": self._is_device_connected(btc_device)
+        }
+
+    def _cleanup_cache(self) -> None:
+        """清理缓存，保持缓存大小在合理范围内"""
+        if len(self._cached_battery) > self._max_cache_size:
+            # 移除最旧的缓存项
+            oldest_keys = list(self._cached_battery.keys())[:-self._max_cache_size]
+            for key in oldest_keys:
+                self._cached_battery.pop(key, None)
+
+    def _get_battery_from_cache(self, device_id: str) -> Optional[int]:
+        """从缓存获取电量
+        
+        Args:
+            device_id: 设备ID
+            
+        Returns:
+            Optional[int]: 电量值或 None
+        """
+        if device_id in self._cached_battery:
+            print(f"使用缓存电量: {device_id}")
+            return self._cached_battery[device_id]
+        return None
+
+    def _update_battery_cache(self, device_id: str, battery: int) -> None:
+        """更新电量缓存
+        
+        Args:
+            device_id: 设备ID
+            battery: 电量值
+        """
+        self._cached_battery[device_id] = battery
+        self._cleanup_cache()
+        print(f"更新电量缓存: {device_id} -> {battery}%")
+
+    def get_classic_battery_level(self, device_id: str) -> Tuple[int, str, int]:
+        """获取经典蓝牙设备的电量水平
+        
+        Args:
+            device_id: 设备 ID
+            
+        Returns:
+            Tuple[int, str, int]: (状态码, 消息, 电量值)
+                状态码: 0成功, -1不支持电池属性, -2不是经典蓝牙设备, -3获取失败, -4无法定位设备
+        """
+        # 尝试从缓存获取
+        cached_battery = self._get_battery_from_cache(device_id)
+        if cached_battery is not None:
+            return 0, "已缓存电量", cached_battery
+
+        try:
             # 从设备 ID 中提取设备实例 ID
-            # 设备 ID 格式通常为: \\?\BTHENUM#{...}#{...}
-            # 我们需要提取 BTHENUM\\{...} 部分
             if "BTHENUM\\" in device_id:
                 # 定位设备节点
                 devnode = wintypes.DWORD()
@@ -199,8 +243,10 @@ class Bluetooth:
                 )
 
                 if result != CR_SUCCESS:
-                    # return f"无法定位设备节点: {result}"、
-                    return -4, f"无法定位设备节点: {result}", {}
+                    error_msg = f"无法定位设备节点: {result}"
+                    print(error_msg)
+                    return -4, error_msg, 0
+                    
                 # 获取电池属性
                 battery = wintypes.BYTE()
                 prop_type = wintypes.DWORD()
@@ -214,92 +260,212 @@ class Bluetooth:
                     ctypes.byref(size),
                     0
                 )
-                # print(battery.value)
+                
                 if result == CR_SUCCESS:
-                    return 0, "ok", battery.value
+                    battery_value = battery.value
+                    # 确保电量值在有效范围内
+                    if 0 <= battery_value <= 100:
+                        self._update_battery_cache(device_id, battery_value)
+                        return 0, "ok", battery_value
+                    else:
+                        print(f"电量值异常: {battery_value}")
+                        return -1, "电量值异常", 0
                 else:
-                    # return "设备不支持电池属性"
-                    return -1, "设备不支持电池属性", {}
+                    print("设备不支持电池属性")
+                    return -1, "设备不支持电池属性", 0
             else:
-                # return "不是经典蓝牙设备"
-                return -2, "不是经典蓝牙设备", {}
+                print("不是经典蓝牙设备")
+                return -2, "不是经典蓝牙设备", 0
         except Exception as e:
-            # return f"获取电量失败: {e}"
-            return -3, f"获取电量失败: {e}", {}
+            error_msg = f"获取电量失败: {e}"
+            print(error_msg)
+            return -3, error_msg, 0
 
-    def enumerate_bluetooth_system_device(self, bt_address: int) -> str | None:
+    def enumerate_bluetooth_system_device(self, bt_address: int) -> Tuple[int, str, str]:
+        """枚举蓝牙系统设备
+        
+        Args:
+            bt_address: 蓝牙地址（整数形式）
+            
+        Returns:
+            Tuple[int, str, str]: (状态码, 消息, 设备实例ID)
+                状态码: 0成功, -2未找到设备, -4获取设备信息失败
+        """
         self._init_setupapi()
         setupapi = self._setupapi
 
-        class_guid = string_to_guid(GUID_DEVCLASS_SYSTEM)
+        try:
+            class_guid = string_to_guid(GUID_DEVCLASS_SYSTEM)
 
-        hdevinfo = setupapi.SetupDiGetClassDevsW(
-            ctypes.byref(class_guid),
-            None,
-            0,
-            DIGCF_PRESENT,
-        )
-
-        if hdevinfo == INVALID_HANDLE_VALUE:
-            print(f"获取设备信息集失败，错误码: {ctypes.get_last_error()}")
-            return -4, f"获取设备信息集失败，错误码: {ctypes.get_last_error()}", {}
-
-        devinfo = SP_DEVINFO_DATA()
-        devinfo.cbSize = ctypes.sizeof(SP_DEVINFO_DATA)
-        index = 0
-
-        addr_hex = f"{bt_address:012X}".upper()
-
-        while setupapi.SetupDiEnumDeviceInfo(hdevinfo, index, ctypes.byref(devinfo)):
-            devid = ctypes.create_unicode_buffer(256)
-            result = setupapi.SetupDiGetDeviceInstanceIdW(
-                hdevinfo, ctypes.byref(devinfo), devid, 256, None
+            hdevinfo = setupapi.SetupDiGetClassDevsW(
+                ctypes.byref(class_guid),
+                None,
+                0,
+                DIGCF_PRESENT,
             )
 
-            if result:
-                instance_id = devid.value
+            if hdevinfo == INVALID_HANDLE_VALUE:
+                error_code = ctypes.get_last_error()
+                error_msg = f"获取设备信息集失败，错误码: {error_code}"
+                print(error_msg)
+                return -4, error_msg, ""
 
-                if "BTHENUM\\" in instance_id and addr_hex in instance_id:
-                    setupapi.SetupDiDestroyDeviceInfoList(hdevinfo)
-                    return 0, "ok", instance_id
+            devinfo = SP_DEVINFO_DATA()
+            devinfo.cbSize = ctypes.sizeof(SP_DEVINFO_DATA)
+            index = 0
 
-            index += 1
+            addr_hex = f"{bt_address:012X}".upper()
+            print(f"查找蓝牙地址: {addr_hex}")
 
-        setupapi.SetupDiDestroyDeviceInfoList(hdevinfo)
-        print("未找到匹配的蓝牙设备")
-        return -2, "error", "未找到匹配的蓝牙设备"
+            while setupapi.SetupDiEnumDeviceInfo(hdevinfo, index, ctypes.byref(devinfo)):
+                devid = ctypes.create_unicode_buffer(256)
+                result = setupapi.SetupDiGetDeviceInstanceIdW(
+                    hdevinfo, ctypes.byref(devinfo), devid, 256, None
+                )
 
-    async def scan_single_device(self, address: str):
-        """扫描单个BTC设备"""
+                if result:
+                    instance_id = devid.value
+                    print(f"检查设备: {instance_id}")
+
+                    if "BTHENUM\\" in instance_id and addr_hex in instance_id:
+                        setupapi.SetupDiDestroyDeviceInfoList(hdevinfo)
+                        print(f"找到匹配设备: {instance_id}")
+                        return 0, "ok", instance_id
+
+                index += 1
+
+            setupapi.SetupDiDestroyDeviceInfoList(hdevinfo)
+            print("未找到匹配的蓝牙设备")
+            return -2, "未找到匹配的蓝牙设备", ""
+            
+        except Exception as e:
+            error_msg = f"枚举设备失败: {e}"
+            print(error_msg)
+            return -4, error_msg, ""
+
+    async def _process_single_device(self, device: DeviceInformation) -> Optional[Dict[str, Any]]:
+        """处理单个经典蓝牙设备
+        
+        Args:
+            device: 设备信息对象
+            
+        Returns:
+            Optional[Dict]: 处理结果，失败返回None
+        """
+        btc_device = None
         try:
-            # 将地址转换为整数
+            btc_device = await BluetoothDevice.from_id_async(device.id)
+            if not btc_device:
+                print(f"无法创建设备实例: {device.id}")
+                return None
+
+            device_info = self._get_device_basic_info(device, btc_device)
+            
+            # 获取电量
+            if device_info["connected"]:
+                # 获取设备实例ID
+                status, msg, instance_id = self.enumerate_bluetooth_system_device(device_info["address"])
+                if status == 0:
+                    # 获取电量
+                    status_code, msg, battery = self.get_classic_battery_level(instance_id)
+                    device_info["battery"] = battery if status_code == 0 else 0
+                else:
+                    device_info["battery"] = 0
+                    msg = "未找到系统设备"
+            else:
+                device_info["battery"] = 0
+                status, msg = 0, "ok"
+
+            return {"code": status, "msg": msg, "data": device_info}
+
+        except Exception as e:
+            print(f"处理设备失败: {device.id}, 错误: {str(e)}")
+            return {
+                "code": -1,
+                "msg": str(e),
+                "data": {
+                    "id": device.id,
+                    "name": device.name,
+                    "type": "BTC",
+                    "connected": False,
+                    "battery": 0
+                }
+            }
+        finally:
+            if btc_device:
+                try:
+                    btc_device.close()
+                except Exception as e:
+                    print(f"关闭设备失败: {e}")
+
+    async def scan_btc_devices(self) -> List[Dict[str, Any]]:
+        """扫描经典蓝牙设备
+        
+        Returns:
+            List[Dict]: 经典蓝牙设备信息列表
+        """
+        devices_info = []
+        
+        try:
+            print("开始扫描经典蓝牙设备...")
+            btc_selector = BluetoothDevice.get_device_selector()
+            btc_devices = await DeviceInformation.find_all_async_aqs_filter(btc_selector)
+
+            if not btc_devices:
+                print("未发现经典蓝牙设备")
+                return devices_info
+
+            print(f"发现 {len(btc_devices)} 个候选设备")
+
+            for device in btc_devices:
+                result = await self._process_single_device(device)
+                if result:
+                    devices_info.append(result)
+                    print(f"设备处理完成: {device.name} -> code={result['code']}")
+
+            print(f"扫描完成，成功处理 {len(devices_info)} 个设备")
+
+        except Exception as e:
+            print(f"扫描经典蓝牙设备失败: {str(e)}")
+
+        return devices_info
+
+    async def scan_single_device(self, address: Union[str, int]) -> Optional[Dict[str, Any]]:
+        """扫描单个经典蓝牙设备
+        
+        Args:
+            address: 设备蓝牙地址，支持字符串(如"E0:51:7F:67:A3:88")或整数
+            
+        Returns:
+            Optional[Dict]: 设备信息，失败返回None
+        """
+        try:
+            # 地址格式转换
             if isinstance(address, str):
-                # 处理带冒号的地址格式，如 "E0:51:7F:67:A3:88"
                 if ":" in address:
                     address = address.replace(":", "")
                 address = int(address, 16)
+            elif not isinstance(address, int):
+                print(f"地址格式错误: {type(address)}")
+                return None
+
+            print(f"BTC扫描指定设备: {hex(address)}")
             
-            # 使用winrt API获取设备信息
             btc_selector = BluetoothDevice.get_device_selector()
             btc_devices = await DeviceInformation.find_all_async_aqs_filter(btc_selector)
-            
+
             for device in btc_devices:
                 btc_device = None
                 try:
                     btc_device = await BluetoothDevice.from_id_async(device.id)
-                    if btc_device and btc_device.bluetooth_address == address:
-                        device_info = {
-                            "id": device.id,
-                            "name": device.name,
-                            "type": "BTC",
-                            "address": btc_device.bluetooth_address
-                        }
+                    if not btc_device:
+                        continue
 
-                        status = btc_device.connection_status
-                        is_connected = status == BluetoothConnectionStatus.CONNECTED
-                        device_info["connected"] = is_connected
-
-                        if is_connected:
+                    if btc_device.bluetooth_address == address:
+                        device_info = self._get_device_basic_info(device, btc_device)
+                        
+                        # 获取电量
+                        if device_info["connected"]:
                             # 获取设备实例ID
                             status, msg, instance_id = self.enumerate_bluetooth_system_device(address)
                             if status == 0:
@@ -308,25 +474,57 @@ class Bluetooth:
                                 device_info["battery"] = battery if status_code == 0 else 0
                             else:
                                 device_info["battery"] = 0
+                                msg = "未找到系统设备"
                         else:
                             device_info["battery"] = 0
+                            msg = "ok"
 
-                        return {"code": 0, "msg": "ok", "data": device_info}
+                        print(f"找到目标设备: {device.name}")
+                        return {"code": 0, "msg": msg, "data": device_info}
+                        
                 except Exception as e:
+                    print(f"检查设备失败: {device.id}, {str(e)}")
                     continue
                 finally:
                     if btc_device:
-                        btc_device.close()
+                        try:
+                            btc_device.close()
+                        except Exception:
+                            pass
 
+            print(f"未找到指定设备: {hex(address)}")
             return None
+            
         except Exception as e:
+            print(f"扫描单个设备失败: {str(e)}")
             return None
+
+    def clear_cache(self) -> None:
+        """清除所有缓存"""
+        self._cached_battery.clear()
+        print("电量缓存已清除")
+
+    def get_cache_info(self) -> Dict[str, Any]:
+        """获取缓存状态信息
+        
+        Returns:
+            Dict: 缓存统计信息
+        """
+        return {
+            "size": len(self._cached_battery),
+            "max_size": self._max_cache_size,
+            "devices": list(self._cached_battery.keys())
+        }
 
 
 async def main():
+    """主函数"""
     btc = Bluetooth()
     all_devices = await btc.scan_btc_devices()
+    print(f"扫描到 {len(all_devices)} 个经典蓝牙设备:")
     print(all_devices)
+    for device in all_devices:
+        print(f"  - {device['data']['name']}: {device['data']['battery']}% ({device['msg']})")
 
 
 if __name__ == "__main__":

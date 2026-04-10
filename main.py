@@ -1,5 +1,24 @@
 # format: off
 # 标准库导入
+from PyQt6.QtCore import pyqtSlot, QTimer
+from PyQt6.QtGui import QFont, QIcon
+import platform
+from utils.tools import log, config, env, dc
+from utils import (
+    get_icon_path,
+    get_exe_path,
+    get_exe_run_dir,
+    get_windows_system_theme,
+    get_win11_taskbar_alignment,
+    get_task_bar_w11,
+)
+from views.components.high_dpi import setup_high_dpi
+from views.taskbar_view import RingWidget
+from views.tray_icon import TrayIcon
+from views.dashboard_view import BluetoothBatteryApp
+from core import bluetooth
+from core.config.constants import MAX_DISPLAY_DEVICES, MAX_PREV_STATES
+
 import sys
 import os
 import subprocess
@@ -23,26 +42,8 @@ from PyQt6.QtWidgets import (
 # 必须在 QApplication 创建前设置，否则 QtWebEngineWidgets 会报错
 QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
 # format: on
-from PyQt6.QtCore import pyqtSlot, QTimer
-from PyQt6.QtGui import QFont, QIcon
-
 
 # 本地库导入
-from core.config.constants import MAX_DISPLAY_DEVICES, MAX_PREV_STATES
-from core import bluetooth
-from views.dashboard_view import BluetoothBatteryApp
-from views.tray_icon import TrayIcon
-from views.taskbar_view import RingWidget
-from views.components.high_dpi import setup_high_dpi
-from utils import (
-    get_icon_path,
-    get_exe_path,
-    get_exe_run_dir,
-    get_windows_system_theme,
-    get_win11_taskbar_alignment,
-    get_task_bar_w11,
-)
-from utils.tools import log, config, env, dc
 
 setup_high_dpi()
 
@@ -85,7 +86,8 @@ class MainWindow(QMainWindow):
         # 从配置读取扫描间隔，默认2000ms
         try:
             # print(self.config.getVal("Settings", "scan_interval", "2000"))
-            scan_interval = int(self.config.getVal("Settings", "scan_interval", "2000"))
+            scan_interval = int(self.config.getVal(
+                "Settings", "scan_interval", "2000"))
         except ValueError:
             scan_interval = 3000
         self.update_timer = QTimer(self)
@@ -97,6 +99,15 @@ class MainWindow(QMainWindow):
 
         dc.set("config", config.all())
 
+    def check_platform():
+        if platform.system() != "Windows":
+            print("仅支持Windows 10/11系统")
+            sys.exit(1)
+        win_ver = platform.release()
+        if win_ver not in ["10", "11"]:
+            print("请使用Windows 10或11系统")
+            sys.exit(1)
+
     def _check_single_instance(self):
         """
         Windows 互斥体检查：确保应用只能运行一个实例
@@ -104,7 +115,8 @@ class MainWindow(QMainWindow):
         """
         ERROR_ALREADY_EXISTS = 183  # 定义常量
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        mutex = kernel32.CreateMutexA(None, False, self.MUTEX_NAME.encode("utf-8"))
+        mutex = kernel32.CreateMutexA(
+            None, False, self.MUTEX_NAME.encode("utf-8"))
 
         # 检查互斥体创建失败
         if not mutex:
@@ -219,7 +231,8 @@ class MainWindow(QMainWindow):
             name = config.getVal(
                 "CustomDeviceName", clean_addr, device.get("name", "未知设备")
             )
-            show_device = config.getVal("CustomDeviceShow", clean_addr, "1") == "1"
+            show_device = config.getVal(
+                "CustomDeviceShow", clean_addr, "1") == "1"
             device["name"] = name
             device["show"] = show_device
             # print(
@@ -282,7 +295,8 @@ class MainWindow(QMainWindow):
         if len(self.prev_device_states) > MAX_PREV_STATES:
             # 批量删除，减少循环次数
             remove_count = len(self.prev_device_states) - MAX_PREV_STATES
-            keys_to_remove = list(self.prev_device_states.keys())[:remove_count]
+            keys_to_remove = list(self.prev_device_states.keys())[
+                :remove_count]
             for key in keys_to_remove:
                 self.prev_device_states.pop(key, None)  # pop加默认值，避免KeyError
 
