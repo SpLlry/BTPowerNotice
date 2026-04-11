@@ -125,6 +125,7 @@ BTPowerNotice是一个实用的蓝牙设备电量监控工具,基于 Python 和 
 
 <div>开发维护不易，请我喝杯可乐吧~(请附上您的GitHub用户名或QQ等联系方式,感谢您的支持)</div>
 爱发电：https://ifdian.net/a/BTPowerNotice
+
 | 支付宝                                  | 微信                                      |
 |--------------------------------------|-----------------------------------------|
 | ![支付宝扫码](https://gh-proxy.com/https://raw.githubusercontent.com/SpLlry/BTPowerNotice/refs/heads/main/resource/20260408174618_230.jpg) | ![微信扫码](https://gh-proxy.com/https://raw.githubusercontent.com/SpLlry/BTPowerNotice/refs/heads/main/resource/a3b2e1d764ad207c66f7aad7e7e6578f.jpg) |
