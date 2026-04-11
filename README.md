@@ -121,10 +121,12 @@ BTPowerNotice是一个实用的蓝牙设备电量监控工具,基于 Python 和 
 - 增加电量历史记录和统计
 - 支持自定义通知方式
 - 跨平台支持（ macOS、Linux ）
-## 捐赠
+## 捐赠:
+**[赞助名单](https://github.com/SpLlry/BTPowerNotice/blob/main/donate.md)**
 
 <div>开发维护不易，请我喝杯可乐吧~(请附上您的GitHub用户名或QQ等联系方式,感谢您的支持)</div>
-爱发电：https://ifdian.net/a/BTPowerNotice
+
+爱发电：[https://ifdian.net/a/BTPowerNotice](https://ifdian.net/a/BTPowerNotice)
 
 | 支付宝                                  | 微信                                      |
 |--------------------------------------|-----------------------------------------|
