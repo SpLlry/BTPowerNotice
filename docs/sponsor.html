@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<script>
+    var _hmt = _hmt || [];
+    (function () {
+        var hm = document.createElement("script");
+        hm.src = "https://hm.baidu.com/hm.js?d9d6177e100dee2b0fcd2f4dccad641f";
+        var s = document.getElementsByTagName("script")[0];
+        s.parentNode.insertBefore(hm, s);
+    })();
+</script>
+<script>
+    var _hmt = _hmt || [];
+    (function () {
+        var hm = document.createElement("script");
+        hm.src = "https://hm.baidu.com/hm.js?f2ed9fe1adb0844c60e854ea6ca5ae5d";
+        var s = document.getElementsByTagName("script")[0];
+        s.parentNode.insertBefore(hm, s);
+    })();
+</script>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>赞助名单 - BTPowerNotice</title>
+    <meta name="description" content="感谢所有赞助支持 BTPowerNotice 开源项目的小伙伴">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#1a1a1a',
+                        primary: '#2dd4bf',
+                        light: '#f3f4f6'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .text-shadow {
+                text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            }
+            .card-hover {
+                transition: all 0.3s ease;
+            }
+            .card-hover:hover {
+                transform: translateY(-4px);
+                border-color: #2dd4bf;
+            }
+            /* 平滑滚动锚点 */
+            html {
+                scroll-behavior: smooth;
+            }
+        }
+
+        /* 美化滚动条 - 适配深色主题 */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px; /* 纤细滚动条 */
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #2a2a2a; /* 轨道颜色匹配深色背景 */
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #4a4a4a; /* 滚动条滑块颜色 */
+            border-radius: 3px; /* 圆角更美观 */
+            transition: background 0.2s ease;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #5a5a5a; /* hover时加深 */
+        }
+        /* 兼容Firefox */
+        .custom-scrollbar {
+            scrollbar-width: thin;
+            scrollbar-color: #4a4a4a #2a2a2a;
+        }
+    </style>
+</head>
+
+<body class="bg-dark text-light min-h-screen flex flex-col">
+    <!-- 导航栏：支持返回首页 -->
+    <header class="w-full py-4 px-6 border-b border-gray-700">
+        <div class="max-w-5xl mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold text-primary">BTPowerNotice</h1>
+            <div class="flex gap-6">
+                <a href="index.html" class="hover:text-primary transition-colors">首页</a>
+                <a href="sponsor.html" class="text-primary font-medium">赞助名单</a>
+                <a href="https://github.com/SpLlry/BTPowerNotice" target="_blank"
+                    class="hover:text-primary transition-colors">GitHub</a>
+                <a href="https://gitee.com/spllry/BTPowerNotice" target="_blank"
+                    class="hover:text-primary transition-colors">Gitee</a>
+            </div>
+        </div>
+    </header>
+
+    <!-- 赞助名单主体内容 -->
+    <main class="flex-1 w-full px-6 py-20">
+        <div class="max-w-5xl mx-auto text-center">
+            <h1 class="text-[clamp(2rem,5vw,4rem)] font-bold mb-6 text-shadow">赞助名单</h1>
+            <p class="text-xl text-gray-300 mb-16 max-w-2xl mx-auto">
+                BTPowerNotice 是一款开源免费的蓝牙工具，您的支持是项目持续更新的动力 💖
+            </p>
+
+            <!-- 爱心赞助 - 滚动列表 + JSON数据源渲染 -->
+            <div class="bg-gray-800 p-10 rounded-xl border border-gray-700 w-full mx-auto mb-16">
+                <!-- 标题 + 我要赞助按钮 -->
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-bold text-primary">☕ 爱心赞助</h3>
+                    <a href="#support-section"
+                        class="bg-primary/90 hover:bg-primary text-dark font-medium px-5 py-2 rounded-lg transition-all hover:shadow-lg hover:shadow-primary/20">
+                        我要赞助
+                    </a>
+                </div>
+
+                <!-- 固定高度 + 美化滚动条 -->
+                <div class="h-[300px] overflow-y-auto custom-scrollbar">
+                    <table class="w-full text-left border-collapse">
+                        <!-- 表头 -->
+                        <thead class="bg-gray-700 sticky top-0">
+                            <tr>
+                                <th class="px-4 py-3 border-b border-gray-600 w-1/5">赞助者</th>
+                                <th class="px-4 py-3 border-b border-gray-600 w-1/5">赞助金额</th>
+                                <th class="px-4 py-3 border-b border-gray-600 w-2/5">交易订单号</th>
+                                <th class="px-4 py-3 border-b border-gray-600 w-1/5">收款来源</th>
+                            </tr>
+                        </thead>
+                        <!-- 动态渲染的表体 -->
+                        <tbody id="sponsorTableBody" class="divide-y divide-gray-700">
+                            <!-- 由JS动态填充数据 -->
+                            <tr>
+                                <td colspan="4" class="px-4 py-8 text-center text-gray-500">
+                                    加载中...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 赞赏支持区域 - 添加锚点ID -->
+            <div id="support-section" class="bg-gray-800 p-10 rounded-xl border border-gray-700 w-full mx-auto">
+                <h3 class="text-2xl font-bold mb-8">赞赏支持</h3>
+                <p class="text-gray-400 mb-1 text-sm">
+                    开发维护不易，请我喝杯可乐吧~
+                </p>
+                <p class="text-gray-400 mb-4 text-sm">您可以扫一扫支付宝红包,扫多少赞助多少</p>
+                <div class="grid md:grid-cols-2 gap-12 items-stretch justify-center">
+                    <!-- 左侧：红包码 -->
+                    <div class="flex flex-col items-center justify-center h-full">
+                        <h4 class="text-lg font-semibold text-gray-300 mb-4">扫码领红包</h4>
+                        <div
+                            class="w-[21rem] bg-gray-900 rounded-lg flex items-center justify-center border border-gray-700 h-full min-h-[calc(96px+96px+1.5rem)]">
+                            <img src="./images/redpacket.png" alt="红包码"
+                                class="w-full h-full object-contain rounded-lg p-2">
+                        </div>
+                    </div>
+                    <!-- 右侧：微信+支付宝 -->
+                    <div class="flex flex-col gap-6 h-full items-center">
+                        <div class="flex flex-col items-center flex-1">
+                            <h4 class="text-lg font-semibold text-gray-300 mb-4">微信赞赏</h4>
+                            <div
+                                class="w-48 h-48 bg-gray-900 rounded-lg flex items-center justify-center border border-gray-700">
+                                <img src="./images/wechat.jpg" alt="微信赞赏码"
+                                    class="w-full h-full object-cover rounded-lg">
+                            </div>
+                        </div>
+                        <div class="flex flex-col items-center flex-1">
+                            <h4 class="text-lg font-semibold text-gray-300 mb-4">支付宝赞赏</h4>
+                            <div
+                                class="w-48 h-48 bg-gray-900 rounded-lg flex items-center justify-center border border-gray-700">
+                                <img src="./images/alipay.jpg" alt="支付宝赞赏码"
+                                    class="w-full h-full object-cover rounded-lg">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-gray-400 mt-8 text-sm">
+                    赞助时可备注昵称，我们会第一时间更新至赞助名单
+                </p>
+            </div>
+        </div>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="w-full py-8 px-6 border-t border-gray-700 text-center text-gray-400">
+        <div class="max-w-5xl mx-auto">
+            <p class="text-lg">BTPowerNotice © 2026 | 开源免费工具</p>
+            <p class="mt-3 flex gap-6 justify-center">
+                <a href="https://github.com/SpLlry/BTPowerNotice"
+                    class="hover:text-primary transition-colors text-lg">GitHub</a>
+                <a href="https://gitee.com/spllr/BTPowerNotice"
+                    class="hover:text-primary transition-colors text-lg">Gitee</a>
+            </p>
+        </div>
+    </footer>
+
+    <script>
+        // 支付方式映射（可扩展）
+        const payModeMap = {
+            1: "微信",
+            2: "支付宝",
+            3: "其他"
+        };
+
+        // 渲染赞助列表
+        function renderSponsorList(sponsorData) {
+            const tableBody = document.getElementById("sponsorTableBody");
+            // 清空原有内容
+            tableBody.innerHTML = "";
+
+            // 遍历数据源生成表格行
+            if (sponsorData && sponsorData.length > 0) {
+                sponsorData.forEach(item => {
+                    const tr = document.createElement("tr");
+                    tr.className = "hover:bg-gray-700/50 transition-colors"; // 平滑过渡
+
+                    // 格式化金额（保留2位小数）
+                    const formattedAmount = `¥${item.amount.toFixed(2)}`;
+                    // 映射支付方式
+                    const paySource = payModeMap[item.pay_mode] || "未知";
+
+                    tr.innerHTML = `
+                        <td class="px-4 py-3">${item.sponsor || "匿名"}</td>
+                        <td class="px-4 py-3">${formattedAmount}</td>
+                        <td class="px-4 py-3">${item.Order_no || "无"}</td>
+                        <td class="px-4 py-3">${paySource}</td>
+                    `;
+
+                    tableBody.appendChild(tr);
+                });
+            } else {
+                // 无数据时显示提示
+                const emptyTr = document.createElement("tr");
+                emptyTr.innerHTML = `
+                    <td colspan="4" class="px-4 py-8 text-center text-gray-500">
+                        暂无赞助数据，期待您的支持 💖
+                    </td>
+                `;
+                tableBody.appendChild(emptyTr);
+            }
+        }
+
+        // 加载本地JSON文件（替代import，浏览器兼容）
+        async function loadSponsorData() {
+            try {
+                // 请确保JSON文件路径正确（./data/sponsor.json）
+                const response = await fetch("./data/sponsor.json");
+                if (!response.ok) {
+                    throw new Error(`加载失败：${response.status}`);
+                }
+                const sponsorData = await response.json();
+                renderSponsorList(sponsorData);
+            } catch (error) {
+                console.error("加载赞助数据失败：", error);
+                // 加载失败时显示提示，并使用默认测试数据
+                const defaultData = [
+                    {
+                        sponsor: "youname",
+                        amount: 10.0,
+                        Order_no: "20260411****122629",
+                        pay_mode: 1
+                    }
+                ];
+                renderSponsorList(defaultData);
+            }
+        }
+
+        // 页面加载完成后加载数据
+        window.addEventListener("DOMContentLoaded", loadSponsorData);
+    </script>
+</body>
+
+</html>
